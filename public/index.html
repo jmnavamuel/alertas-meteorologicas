@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alertas Meteorológicas AEMET - Sedes</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <header>
+        <h1>🌦️ Monitor de Alertas Meteorológicas AEMET</h1>
+        <p>Estado de alertas en tiempo real para todas las sedes</p>
+    </header>
+    
+    <main>
+        <div class="container">
+            <div id="map">
+                <div class="map-controls">
+                    <button id="btnResetMap" class="btn-reset-map" title="Volver a vista de España">
+                        🇪🇸 Centrar España
+                    </button>
+                    <button id="btnCanarias" class="btn-reset-map" title="Centrar en Islas Canarias">
+                        🏝️ Canarias
+                    </button>
+                </div>
+            </div>
+            <div class="legend">
+                <h3>Niveles de Alerta</h3>
+                <div class="legend-item">
+                    <span class="legend-color verde"></span>
+                    <span>Verde - Sin riesgo</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color amarillo"></span>
+                    <span>Amarillo - Riesgo</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color naranja"></span>
+                    <span>Naranja - Riesgo importante</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color rojo"></span>
+                    <span>Rojo - Riesgo extremo</span>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="/js/map.js"></script>
+</body>
+</html>

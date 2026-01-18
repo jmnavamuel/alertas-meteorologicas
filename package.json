@@ -1,0 +1,18 @@
+{
+  "name": "alertas-meteorologicas-aemet",
+  "version": "1.0.0",
+  "description": "Mapa interactivo de alertas meteorológicas AEMET en sedes de España",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "csv-parser": "^3.0.0",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
