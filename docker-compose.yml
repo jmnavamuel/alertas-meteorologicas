@@ -7,7 +7,7 @@ services:
     ports:
       - "3100:3100"
     volumes:
-      - ./data:/app/data:ro
+      - ./data:/app/data:rw
     environment:
       - NODE_ENV=production
       - PORT=3100
