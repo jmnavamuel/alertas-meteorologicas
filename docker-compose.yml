@@ -8,13 +8,25 @@ services:
       - "3100:3100"
     volumes:
       - ./data:/app/data:rw
-    environment:
-      - NODE_ENV=production
-      - PORT=3100
+      - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - .env
     restart: unless-stopped
+    networks:
+      - alertas-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3100"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  alertas-network:
+    driver: bridge
+EOF

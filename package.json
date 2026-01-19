@@ -1,18 +1,32 @@
 {
   "name": "alertas-meteorologicas-aemet",
-  "version": "1.0.0",
-  "description": "Mapa interactivo de alertas meteorológicas AEMET en sedes de España",
+  "version": "2.0.0",
+  "description": "Sistema de monitorización de alertas meteorológicas AEMET en tiempo real",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "csv-parser": "^3.0.0",
-    "cors": "^2.8.5"
+    "express": "4.18.2",
+    "csv-parser": "3.0.0",
+    "cors": "2.8.5",
+    "node-fetch": "2.7.0",
+    "dotenv": "16.3.1"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
-  }
+    "nodemon": "3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "aemet",
+    "alertas",
+    "meteorologia",
+    "tiempo",
+    "españa"
+  ],
+  "author": "",
+  "license": "MIT"
 }

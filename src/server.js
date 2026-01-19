@@ -1,12 +1,21 @@
+require('dotenv').config();
 const express = require('express');
 const fs = require('fs');
 const csv = require('csv-parser');
 const path = require('path');
 const cors = require('cors');
-const { getAlertaMock } = require('./aemet-mock');
+const { obtenerAlertasAEMET } = require('./aemet-service');
 
 const app = express();
 const PORT = process.env.PORT || 3100;
+
+// Verificar que existe la API Key
+if (!process.env.AEMET_API_KEY || process.env.AEMET_API_KEY === 'your_api_key_here' || process.env.AEMET_API_KEY === 'TU_API_KEY_REAL_AQUI') {
+  console.error('❌ ERROR: No se ha configurado la API Key de AEMET');
+  console.error('Por favor, edita el archivo .env con tu AEMET_API_KEY');
+  console.error('Ejemplo: AEMET_API_KEY=tu_clave_aqui');
+  process.exit(1);
+}
 
 app.use(cors());
 app.use(express.json());
@@ -36,7 +45,6 @@ function leerSedes() {
     const sedes = [];
     const csvPath = path.join(__dirname, '../data/sedes.csv');
     
-    // Verificar que existe el archivo
     if (!fs.existsSync(csvPath)) {
       console.error('❌ No se encuentra el archivo CSV:', csvPath);
       reject(new Error('Archivo CSV no encontrado'));
@@ -53,7 +61,8 @@ function leerSedes() {
           calle: row.calle,
           codigoPostal: row.codigo_postal,
           latitud: parseFloat(row.latitud),
-          longitud: parseFloat(row.longitud)
+          longitud: parseFloat(row.longitud),
+          provincia: row.provincia || null
         });
       })
       .on('end', () => {
@@ -67,16 +76,21 @@ function leerSedes() {
   });
 }
 
-// Endpoint para obtener sedes con alertas
+// Endpoint para obtener sedes con alertas reales de AEMET
 app.get('/api/sedes', async (req, res) => {
   try {
     const sedes = await leerSedes();
     
-    // Añadir alertas mock a cada sede
-    const sedesConAlertas = sedes.map(sede => ({
-      ...sede,
-      alerta: getAlertaMock(sede.latitud, sede.longitud)
-    }));
+    // Obtener alertas reales de AEMET para cada sede
+    const sedesConAlertas = await Promise.all(
+      sedes.map(async (sede) => {
+        const alerta = await obtenerAlertasAEMET(sede.provincia, sede.codigoPostal);
+        return {
+          ...sede,
+          alerta
+        };
+      })
+    );
     
     res.json(sedesConAlertas);
   } catch (error) {
@@ -90,7 +104,22 @@ app.get('/api/sedes', async (req, res) => {
 
 // Endpoint de health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    apiKeyConfigured: !!process.env.AEMET_API_KEY
+  });
+});
+
+// Endpoint para verificar configuración
+app.get('/api/config/status', (req, res) => {
+  res.json({
+    apiKeyConfigured: !!process.env.AEMET_API_KEY && 
+                      process.env.AEMET_API_KEY !== 'your_api_key_here' && 
+                      process.env.AEMET_API_KEY !== 'TU_API_KEY_REAL_AQUI',
+    nodeEnv: process.env.NODE_ENV,
+    port: PORT
+  });
 });
 
 // Manejo de errores global
@@ -104,15 +133,19 @@ process.on('unhandledRejection', (err) => {
 
 // Iniciar servidor
 const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Servidor escuchando en http://0.0.0.0:${PORT}`);
+  console.log('╔════════════════════════════════════════════════════════╗');
+  console.log('║   🌦️  SISTEMA DE ALERTAS METEOROLÓGICAS AEMET  🌦️   ║');
+  console.log('╚════════════════════════════════════════════════════════╝');
+  console.log(`✅ Servidor iniciado en http://0.0.0.0:${PORT}`);
   console.log(`📁 Directorio de trabajo: ${__dirname}`);
-  console.log(`📂 Directorio public: ${path.join(__dirname, '../public')}`);
-  console.log(`📊 Directorio data: ${path.join(__dirname, '../data')}`);
+  console.log(`🔑 API Key AEMET: ${process.env.AEMET_API_KEY && process.env.AEMET_API_KEY !== 'your_api_key_here' && process.env.AEMET_API_KEY !== 'TU_API_KEY_REAL_AQUI' ? '✅ Configurada' : '❌ NO configurada'}`);
+  console.log(`🌍 Entorno: ${process.env.NODE_ENV || 'development'}`);
+  console.log('═══════════════════════════════════════════════════════');
 });
 
 // Manejo de señales de cierre
 process.on('SIGTERM', () => {
-  console.log('⚠️ SIGTERM recibido, cerrando servidor...');
+  console.log('⚠️  SIGTERM recibido, cerrando servidor...');
   server.close(() => {
     console.log('✅ Servidor cerrado correctamente');
     process.exit(0);
@@ -120,7 +153,7 @@ process.on('SIGTERM', () => {
 });
 
 process.on('SIGINT', () => {
-  console.log('⚠️ SIGINT recibido, cerrando servidor...');
+  console.log('⚠️  SIGINT recibido, cerrando servidor...');
   server.close(() => {
     console.log('✅ Servidor cerrado correctamente');
     process.exit(0);
