@@ -6,6 +6,9 @@ package-lock.json
 # Variables de entorno (NUNCA subir al git)
 .env
 
+# Archivos de alertas descargados
+data/alertas-*.csv
+
 # Logs
 *.log
 logs/
