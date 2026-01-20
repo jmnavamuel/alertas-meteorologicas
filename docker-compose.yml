@@ -29,4 +29,3 @@ services:
 networks:
   alertas-network:
     driver: bridge
-EOF

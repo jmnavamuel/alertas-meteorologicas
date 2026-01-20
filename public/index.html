@@ -9,40 +9,69 @@
 </head>
 <body>
     <header>
-        <h1>🌦️ Monitor de Alertas Meteorológicas AEMET</h1>
-        <p>Estado de alertas en tiempo real para todas las sedes</p>
+        <div class="header-content">
+            <div class="header-title">
+                <h1>🌦️ Monitor de Alertas Meteorológicas AEMET</h1>
+                <p>Estado de alertas en tiempo real para todas las sedes</p>
+            </div>
+            <div class="sync-status" id="syncStatus">
+                <div class="sync-indicator">
+                    <span class="sync-icon" id="syncIcon">⏳</span>
+                    <div class="sync-info">
+                        <div class="sync-time" id="syncTime">Conectando...</div>
+                        <div class="sync-message" id="syncMessage">Iniciando sistema</div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </header>
     
     <main>
         <div class="container">
-            <div id="map">
-                <div class="map-controls">
-                    <button id="btnResetMap" class="btn-reset-map" title="Volver a vista de España">
-                        🇪🇸 Centrar España
-                    </button>
-                    <button id="btnCanarias" class="btn-reset-map" title="Centrar en Islas Canarias">
-                        🏝️ Canarias
+            <div class="map-section">
+                <div id="map">
+                    <div class="map-controls">
+                        <button id="btnResetMap" class="btn-reset-map" title="Volver a vista de España">
+                            🇪🇸 Centrar España
+                        </button>
+                        <button id="btnCanarias" class="btn-reset-map" title="Centrar en Islas Canarias">
+                            🏝️ Canarias
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sidebar">
+                <div class="legend">
+                    <h3>Niveles de Alerta</h3>
+                    <div class="legend-item">
+                        <span class="legend-color verde"></span>
+                        <span>Verde - Sin riesgo</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color amarillo"></span>
+                        <span>Amarillo - Riesgo</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color naranja"></span>
+                        <span>Naranja - Riesgo importante</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color rojo"></span>
+                        <span>Rojo - Riesgo extremo</span>
+                    </div>
+                    
+                    <button id="btnActualizar" class="btn-actualizar">
+                        🔄 Actualizar Datos AEMET
                     </button>
                 </div>
             </div>
-            <div class="legend">
-                <h3>Niveles de Alerta</h3>
-                <div class="legend-item">
-                    <span class="legend-color verde"></span>
-                    <span>Verde - Sin riesgo</span>
-                </div>
-                <div class="legend-item">
-                    <span class="legend-color amarillo"></span>
-                    <span>Amarillo - Riesgo</span>
-                </div>
-                <div class="legend-item">
-                    <span class="legend-color naranja"></span>
-                    <span>Naranja - Riesgo importante</span>
-                </div>
-                <div class="legend-item">
-                    <span class="legend-color rojo"></span>
-                    <span>Rojo - Riesgo extremo</span>
-                </div>
+        </div>
+        
+        <div class="alertas-activas">
+            <h2>⚠️ Alertas Activas</h2>
+            <div id="tablaAlertas">
+                <p class="loading">Cargando alertas...</p>
             </div>
         </div>
     </main>

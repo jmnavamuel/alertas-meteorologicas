@@ -4,7 +4,7 @@ const fs = require('fs');
 const csv = require('csv-parser');
 const path = require('path');
 const cors = require('cors');
-const { obtenerAlertasAEMET } = require('./aemet-service');
+const { obtenerAlertasAEMET, getEstadoSincronizacion, forzarActualizacion } = require('./aemet-service');
 
 const app = express();
 const PORT = process.env.PORT || 3100;
@@ -97,6 +97,33 @@ app.get('/api/sedes', async (req, res) => {
     console.error('❌ Error en /api/sedes:', error);
     res.status(500).json({ 
       error: 'Error al cargar las sedes',
+      message: error.message 
+    });
+  }
+});
+
+// Endpoint para obtener estado de sincronización
+app.get('/api/sincronizacion/estado', (req, res) => {
+  const estado = getEstadoSincronizacion();
+  res.json(estado);
+});
+
+// Endpoint para forzar actualización
+app.post('/api/sincronizacion/forzar', async (req, res) => {
+  try {
+    console.log('🔄 Forzando actualización manual de datos AEMET...');
+    await forzarActualizacion();
+    const estado = getEstadoSincronizacion();
+    res.json({ 
+      success: true, 
+      mensaje: 'Actualización completada',
+      estado 
+    });
+  } catch (error) {
+    console.error('❌ Error forzando actualización:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Error al forzar actualización',
       message: error.message 
     });
   }

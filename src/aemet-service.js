@@ -7,6 +7,16 @@ const AEMET_BASE_URL = 'https://opendata.aemet.es/opendata/api';
 const cache = new Map();
 const CACHE_DURATION = 10 * 60 * 1000; // 10 minutos
 
+// Estado de sincronización
+let estadoSincronizacion = {
+  ultimaSincronizacion: null,
+  estado: 'pendiente', // 'ok', 'error', 'pendiente'
+  mensaje: 'Esperando primera sincronización',
+  totalConsultas: 0,
+  consultasExitosas: 0,
+  consultasFallidas: 0
+};
+
 // Mapeo de códigos postales a provincias AEMET
 const CP_TO_PROVINCIA = {
   '28': '28', // Madrid
@@ -41,6 +51,36 @@ function obtenerCodigoProvincia(codigoPostal) {
 }
 
 /**
+ * Actualizar estado de sincronización
+ */
+function actualizarEstadoSincronizacion(exito, mensaje = '') {
+  estadoSincronizacion.ultimaSincronizacion = new Date().toISOString();
+  estadoSincronizacion.totalConsultas++;
+  
+  if (exito) {
+    estadoSincronizacion.consultasExitosas++;
+    estadoSincronizacion.estado = 'ok';
+    estadoSincronizacion.mensaje = mensaje || 'Sincronización exitosa';
+  } else {
+    estadoSincronizacion.consultasFallidas++;
+    estadoSincronizacion.estado = 'error';
+    estadoSincronizacion.mensaje = mensaje || 'Error en la sincronización';
+  }
+}
+
+/**
+ * Obtener estado de sincronización
+ */
+function getEstadoSincronizacion() {
+  return {
+    ...estadoSincronizacion,
+    tasaExito: estadoSincronizacion.totalConsultas > 0 
+      ? ((estadoSincronizacion.consultasExitosas / estadoSincronizacion.totalConsultas) * 100).toFixed(1)
+      : 0
+  };
+}
+
+/**
  * Realiza una petición a la API de AEMET
  */
 async function peticionAEMET(url) {
@@ -56,12 +96,16 @@ async function peticionAEMET(url) {
     // La API de AEMET devuelve una URL con los datos reales
     if (data.datos) {
       const datosResponse = await fetch(data.datos);
-      return await datosResponse.json();
+      const resultado = await datosResponse.json();
+      actualizarEstadoSincronizacion(true, 'Datos obtenidos correctamente de AEMET');
+      return resultado;
     }
     
+    actualizarEstadoSincronizacion(true, 'Respuesta recibida de AEMET');
     return data;
   } catch (error) {
     console.error('Error en petición AEMET:', error.message);
+    actualizarEstadoSincronizacion(false, `Error: ${error.message}`);
     return null;
   }
 }
@@ -84,8 +128,11 @@ async function obtenerAlertasAEMET(provincia, codigoPostal) {
     const cached = cache.get(cacheKey);
     
     if (cached && (Date.now() - cached.timestamp < CACHE_DURATION)) {
+      console.log(`📦 Usando cache para provincia ${codigoProv}`);
       return cached.data;
     }
+    
+    console.log(`🌐 Consultando API AEMET para provincia ${codigoProv}...`);
     
     // Obtener alertas de la API
     const url = `${AEMET_BASE_URL}/avisos_cap/ultimoelaborado/area/${codigoProv}`;
@@ -129,6 +176,8 @@ async function obtenerAlertasAEMET(provincia, codigoPostal) {
     // Guardar en cache
     cache.set(cacheKey, { data: resultado, timestamp: Date.now() });
     
+    console.log(`✅ Alerta para provincia ${codigoProv}: ${nivelMaximo.toUpperCase()}`);
+    
     return resultado;
     
   } catch (error) {
@@ -143,17 +192,35 @@ async function obtenerAlertasAEMET(provincia, codigoPostal) {
   }
 }
 
+/**
+ * Forzar actualización limpiando cache
+ */
+async function forzarActualizacion() {
+  console.log('🔄 Limpiando cache para forzar actualización...');
+  cache.clear();
+  estadoSincronizacion.mensaje = 'Actualización manual iniciada';
+  console.log('✅ Cache limpiado. Próximas peticiones obtendrán datos frescos de AEMET');
+}
+
 // Limpiar cache cada hora
 setInterval(() => {
   const now = Date.now();
+  let eliminadas = 0;
+  
   for (const [key, value] of cache.entries()) {
     if (now - value.timestamp > CACHE_DURATION) {
       cache.delete(key);
+      eliminadas++;
     }
   }
-  console.log(`🧹 Cache limpiado. Entradas actuales: ${cache.size}`);
+  
+  if (eliminadas > 0) {
+    console.log(`🧹 Cache limpiado. Entradas eliminadas: ${eliminadas}. Entradas actuales: ${cache.size}`);
+  }
 }, 60 * 60 * 1000);
 
 module.exports = {
-  obtenerAlertasAEMET
+  obtenerAlertasAEMET,
+  getEstadoSincronizacion,
+  forzarActualizacion
 };

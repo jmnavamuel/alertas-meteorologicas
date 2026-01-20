@@ -12,19 +12,92 @@ body {
 
 header {
     background: rgba(255, 255, 255, 0.95);
-    padding: 20px;
-    text-align: center;
+    padding: 15px 20px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
 }
 
-header h1 {
-    color: #333;
-    margin-bottom: 5px;
+.header-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
 }
 
-header p {
+.header-title h1 {
+    color: #333;
+    margin-bottom: 5px;
+    font-size: 24px;
+}
+
+.header-title p {
     color: #666;
     font-size: 14px;
+}
+
+.sync-status {
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 10px 15px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.sync-indicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sync-icon {
+    font-size: 24px;
+    animation: pulse 2s infinite;
+}
+
+.sync-icon.ok {
+    animation: none;
+}
+
+.sync-icon.error {
+    animation: shake 0.5s;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+.sync-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.sync-time {
+    font-size: 12px;
+    font-weight: bold;
+    color: #333;
+}
+
+.sync-message {
+    font-size: 11px;
+    color: #666;
+}
+
+.sync-message.ok {
+    color: #28a745;
+}
+
+.sync-message.error {
+    color: #dc3545;
 }
 
 main {
@@ -33,15 +106,19 @@ main {
 
 .container {
     max-width: 1400px;
-    margin: 0 auto;
+    margin: 0 auto 20px;
     display: flex;
     gap: 20px;
     flex-wrap: wrap;
 }
 
-#map {
+.map-section {
     flex: 1;
     min-width: 300px;
+}
+
+#map {
+    width: 100%;
     height: 600px;
     border-radius: 10px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.2);
@@ -88,12 +165,15 @@ main {
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
+.sidebar {
+    min-width: 250px;
+}
+
 .legend {
     background: white;
     padding: 20px;
     border-radius: 10px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-    min-width: 250px;
 }
 
 .legend h3 {
@@ -116,12 +196,127 @@ main {
     border-radius: 50%;
     border: 2px solid #fff;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    flex-shrink: 0;
 }
 
 .legend-color.verde { background: #28a745; }
 .legend-color.amarillo { background: #ffc107; }
 .legend-color.naranja { background: #fd7e14; }
 .legend-color.rojo { background: #dc3545; }
+
+.btn-actualizar {
+    width: 100%;
+    margin-top: 15px;
+    padding: 12px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.btn-actualizar:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+.btn-actualizar:active {
+    transform: translateY(0);
+}
+
+.btn-actualizar:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.alertas-activas {
+    max-width: 1400px;
+    margin: 0 auto;
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+
+.alertas-activas h2 {
+    color: #333;
+    margin-bottom: 15px;
+    border-bottom: 2px solid #667eea;
+    padding-bottom: 10px;
+}
+
+.tabla-alertas {
+    overflow-x: auto;
+}
+
+.tabla-alertas table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.tabla-alertas th {
+    background: #f5f5f5;
+    padding: 12px;
+    text-align: left;
+    font-weight: bold;
+    color: #333;
+    border-bottom: 2px solid #ddd;
+    white-space: nowrap;
+}
+
+.tabla-alertas td {
+    padding: 12px;
+    border-bottom: 1px solid #eee;
+}
+
+.tabla-alertas tr:hover {
+    background: #f9f9f9;
+}
+
+.nivel-badge {
+    display: inline-block;
+    padding: 5px 12px;
+    border-radius: 15px;
+    font-weight: bold;
+    font-size: 12px;
+    color: white;
+    text-transform: uppercase;
+}
+
+.nivel-badge.amarillo {
+    background: #ffc107;
+    color: #333;
+}
+
+.nivel-badge.naranja {
+    background: #fd7e14;
+}
+
+.nivel-badge.rojo {
+    background: #dc3545;
+}
+
+.sin-alertas {
+    text-align: center;
+    padding: 40px;
+    color: #666;
+}
+
+.sin-alertas-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+}
+
+.loading {
+    text-align: center;
+    padding: 20px;
+    color: #666;
+}
 
 .leaflet-popup-content {
     margin: 15px;
@@ -149,6 +344,15 @@ main {
 }
 
 @media (max-width: 768px) {
+    .header-content {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .sync-status {
+        width: 100%;
+    }
+    
     .container {
         flex-direction: column;
     }
@@ -165,5 +369,14 @@ main {
     .btn-reset-map {
         font-size: 12px;
         padding: 8px 12px;
+    }
+    
+    .tabla-alertas {
+        font-size: 12px;
+    }
+    
+    .tabla-alertas th,
+    .tabla-alertas td {
+        padding: 8px;
     }
 }
