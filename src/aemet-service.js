@@ -1,10 +1,15 @@
 const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+
+const execAsync = promisify(exec);
 
 const AEMET_API_KEY = process.env.AEMET_API_KEY;
 const AEMET_BASE_URL = 'https://opendata.aemet.es/opendata/api';
 const DATA_DIR = path.join(__dirname, '../data');
+const TEMP_DIR = path.join(DATA_DIR, 'temp');
 
 // Cache de alertas en memoria
 const cache = new Map();
@@ -99,6 +104,33 @@ const NIVELES_ALERTA = {
   naranja: { color: '#fd7e14', nivel: 'naranja', nombre: 'Riesgo importante' },
   rojo: { color: '#dc3545', nivel: 'rojo', nombre: 'Riesgo extremo' }
 };
+
+/**
+ * Crear directorio temporal si no existe
+ */
+function asegurarDirectorioTemporal() {
+  if (!fs.existsSync(TEMP_DIR)) {
+    fs.mkdirSync(TEMP_DIR, { recursive: true });
+    console.log(`📁 Directorio temporal creado: ${TEMP_DIR}`);
+  }
+}
+
+/**
+ * Limpiar directorio temporal
+ */
+function limpiarDirectorioTemporal() {
+  try {
+    if (fs.existsSync(TEMP_DIR)) {
+      const archivos = fs.readdirSync(TEMP_DIR);
+      archivos.forEach(archivo => {
+        fs.unlinkSync(path.join(TEMP_DIR, archivo));
+      });
+      console.log('🧹 Directorio temporal limpiado');
+    }
+  } catch (error) {
+    console.error('Error limpiando directorio temporal:', error);
+  }
+}
 
 /**
  * Obtiene el código de provincia desde el código postal
@@ -279,163 +311,198 @@ function getEstadoSincronizacion() {
 }
 
 /**
- * Realiza una petición a la API de AEMET
+ * Extraer código de provincia desde nombre de archivo CAP
  */
-async function peticionAEMET(url) {
+function extraerCodigoProvinciaDeArchivo(nombreArchivo) {
+  // Los archivos CAP suelen tener formato: ES-A-ES_28_20260120123045_...
+  // O similar con código de provincia
+  const match = nombreArchivo.match(/ES[_-][A-Z][_-]ES[_-](\d{2})[_-]/i);
+  if (match && match[1]) {
+    return match[1];
+  }
+  
+  // Intentar otros patrones
+  const match2 = nombreArchivo.match(/[_-](\d{2})[_-]/);
+  if (match2 && match2[1] && PROVINCIAS_AEMET[match2[1]]) {
+    return match2[1];
+  }
+  
+  return null;
+}
+
+/**
+ * Procesar archivo CAP XML
+ */
+function procesarArchivoCAP(rutaArchivo) {
   try {
-    const response = await fetch(`${url}?api_key=${AEMET_API_KEY}`, {
-      headers: {
-        'Accept': 'application/json'
-      },
-      timeout: 15000
-    });
+    const contenido = fs.readFileSync(rutaArchivo, 'utf-8');
     
-    if (!response.ok) {
-      console.error(`❌ Error HTTP: ${response.status} - ${response.statusText}`);
+    // Buscar nivel de alerta (severity)
+    const severityMatch = contenido.match(/<severity>(.*?)<\/severity>/i);
+    const eventMatch = contenido.match(/<event>(.*?)<\/event>/i);
+    const areaDescMatch = contenido.match(/<areaDesc>(.*?)<\/areaDesc>/i);
+    
+    if (!severityMatch) {
       return null;
     }
     
-    const data = await response.json();
+    const severity = severityMatch[1].toLowerCase();
+    const evento = eventMatch ? eventMatch[1] : null;
+    const areaDesc = areaDescMatch ? areaDescMatch[1] : null;
     
-    // Verificar si la API devuelve un error
-    if (data.estado && data.estado !== 200) {
-      console.error(`❌ Error AEMET API: ${data.estado} - ${data.descripcion}`);
-      return null;
-    }
+    // Mapear severity de CAP a niveles AEMET
+    let nivel = 'verde';
+    if (severity.includes('extreme')) nivel = 'rojo';
+    else if (severity.includes('severe')) nivel = 'naranja';
+    else if (severity.includes('moderate')) nivel = 'amarillo';
+    else if (severity.includes('minor')) nivel = 'amarillo';
     
-    // La API de AEMET devuelve una URL con los datos reales en el campo 'datos'
-    if (data.datos) {
-      const datosResponse = await fetch(data.datos, {
-        timeout: 15000
-      });
-      
-      if (!datosResponse.ok) {
-        console.error(`❌ Error obteniendo datos: ${datosResponse.status}`);
-        return null;
-      }
-      
-      const resultado = await datosResponse.json();
-      return resultado;
-    }
-    
-    return data;
+    return {
+      nivel,
+      fenomeno: evento || areaDesc,
+      areaDesc
+    };
     
   } catch (error) {
-    console.error(`❌ Error en petición AEMET: ${error.message}`);
+    console.error(`Error procesando archivo CAP ${path.basename(rutaArchivo)}:`, error.message);
     return null;
   }
 }
 
 /**
- * Descargar alertas de todas las provincias desde AEMET
+ * Descargar y procesar alertas desde AEMET
  */
 async function descargarAlertasAEMET() {
   console.log('═══════════════════════════════════════════════════════');
-  console.log('🌐 INICIANDO DESCARGA DE ALERTAS AEMET');
+  console.log('🌐 DESCARGANDO ALERTAS AEMET (Archivo completo)');
   console.log('═══════════════════════════════════════════════════════');
   
-  const alertasPorProvincia = {};
-  const todosLosCodigos = Object.keys(PROVINCIAS_AEMET);
-  let exitosas = 0;
-  let fallidas = 0;
-  let conAlertas = 0;
-  
-  for (const codigoProv of todosLosCodigos) {
-    const nombreProv = PROVINCIAS_AEMET[codigoProv];
+  try {
+    asegurarDirectorioTemporal();
+    limpiarDirectorioTemporal();
     
-    try {
-      console.log(`\n📍 [${codigoProv}] ${nombreProv}`);
-      
-      const url = `${AEMET_BASE_URL}/avisos_cap/ultimoelaborado/area/${codigoProv}`;
-      const alertas = await peticionAEMET(url);
-      
-      if (!alertas) {
-        console.log(`   ⚠️  Sin respuesta de API (asumiendo verde)`);
-        alertasPorProvincia[codigoProv] = {
-          nivel: 'verde',
-          fenomeno: null,
-          timestamp: new Date().toISOString()
-        };
-        fallidas++;
-      } else if (alertas.length === 0) {
-        console.log(`   ✅ Sin alertas activas (VERDE)`);
-        alertasPorProvincia[codigoProv] = {
-          nivel: 'verde',
-          fenomeno: null,
-          timestamp: new Date().toISOString()
-        };
-        exitosas++;
-      } else {
-        // Procesar alertas
-        let nivelMaximo = 'verde';
-        let fenomenoActivo = null;
-        
-        console.log(`   📊 Procesando ${alertas.length} alerta(s)`);
-        
-        alertas.forEach((alerta, idx) => {
-          if (alerta.nivel) {
-            const nivel = alerta.nivel.toLowerCase();
-            const fenomeno = alerta.fenomeno || alerta.evento || 'Sin especificar';
-            
-            console.log(`      • Alerta ${idx + 1}: ${nivel.toUpperCase()} - ${fenomeno}`);
-            
-            // Determinar nivel máximo
-            const prioridad = { rojo: 4, naranja: 3, amarillo: 2, verde: 1 };
-            const prioridadActual = prioridad[nivel] || 1;
-            const prioridadMaxima = prioridad[nivelMaximo] || 1;
-            
-            if (prioridadActual > prioridadMaxima) {
-              nivelMaximo = nivel;
-              fenomenoActivo = fenomeno;
-            }
-          }
-        });
-        
-        alertasPorProvincia[codigoProv] = {
-          nivel: nivelMaximo,
-          fenomeno: fenomenoActivo,
-          timestamp: new Date().toISOString()
-        };
-        
-        const emoji = nivelMaximo === 'rojo' ? '🔴' : nivelMaximo === 'naranja' ? '🟠' : '🟡';
-        console.log(`   ${emoji} ALERTA ${nivelMaximo.toUpperCase()} - ${fenomenoActivo}`);
-        exitosas++;
-        conAlertas++;
-      }
-      
-      // Pausa para no saturar la API
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-    } catch (error) {
-      console.error(`   ❌ Error crítico: ${error.message}`);
-      alertasPorProvincia[codigoProv] = {
+    // 1. Obtener URL del archivo de alertas desde la API
+    console.log('📡 Consultando API de AEMET...');
+    const url = `${AEMET_BASE_URL}/avisos_cap/ultimoelaborado?api_key=${AEMET_API_KEY}`;
+    
+    const response = await fetch(url, {
+      headers: { 'Accept': 'application/json' },
+      timeout: 15000
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Error HTTP: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.datos) {
+      throw new Error('La API no devolvió URL de datos');
+    }
+    
+    console.log(`✅ URL de descarga obtenida`);
+    
+    // 2. Descargar archivo tar.gz
+    console.log('📥 Descargando archivo de alertas...');
+    const archivoResponse = await fetch(data.datos, { timeout: 30000 });
+    
+    if (!archivoResponse.ok) {
+      throw new Error(`Error descargando archivo: ${archivoResponse.status}`);
+    }
+    
+    const buffer = await archivoResponse.buffer();
+    const rutaTarGz = path.join(TEMP_DIR, 'alertas.tar.gz');
+    fs.writeFileSync(rutaTarGz, buffer);
+    
+    console.log(`✅ Archivo descargado: ${(buffer.length / 1024).toFixed(2)} KB`);
+    
+    // 3. Extraer archivo tar.gz
+    console.log('📦 Extrayendo archivos...');
+    await execAsync(`tar -xzf "${rutaTarGz}" -C "${TEMP_DIR}"`);
+    console.log('✅ Archivos extraídos');
+    
+    // 4. Procesar archivos CAP XML
+    console.log('📊 Procesando archivos de alertas...\n');
+    
+    const archivosXML = fs.readdirSync(TEMP_DIR)
+      .filter(f => f.endsWith('.xml') || f.endsWith('.cap'));
+    
+    console.log(`   Encontrados ${archivosXML.length} archivos CAP\n`);
+    
+    // Inicializar todas las provincias en verde
+    const alertasPorProvincia = {};
+    Object.keys(PROVINCIAS_AEMET).forEach(codigo => {
+      alertasPorProvincia[codigo] = {
         nivel: 'verde',
         fenomeno: null,
         timestamp: new Date().toISOString()
       };
-      fallidas++;
+    });
+    
+    let procesados = 0;
+    let conAlertas = 0;
+    
+    // Procesar cada archivo CAP
+    for (const archivo of archivosXML) {
+      const rutaCompleta = path.join(TEMP_DIR, archivo);
+      const codigoProv = extraerCodigoProvinciaDeArchivo(archivo);
+      
+      if (!codigoProv || !PROVINCIAS_AEMET[codigoProv]) {
+        console.log(`   ⚠️  ${archivo}: No se pudo identificar provincia`);
+        continue;
+      }
+      
+      const datosAlerta = procesarArchivoCAP(rutaCompleta);
+      
+      if (!datosAlerta) {
+        continue;
+      }
+      
+      const nombreProv = PROVINCIAS_AEMET[codigoProv];
+      
+      // Actualizar solo si el nivel es mayor que el actual
+      const prioridad = { rojo: 4, naranja: 3, amarillo: 2, verde: 1 };
+      const nivelActual = alertasPorProvincia[codigoProv].nivel;
+      
+      if (prioridad[datosAlerta.nivel] > prioridad[nivelActual]) {
+        alertasPorProvincia[codigoProv] = {
+          nivel: datosAlerta.nivel,
+          fenomeno: datosAlerta.fenomeno,
+          timestamp: new Date().toISOString()
+        };
+        
+        const emoji = datosAlerta.nivel === 'rojo' ? '🔴' : 
+                      datosAlerta.nivel === 'naranja' ? '🟠' : '🟡';
+        console.log(`   ${emoji} [${codigoProv}] ${nombreProv}: ${datosAlerta.nivel.toUpperCase()} - ${datosAlerta.fenomeno}`);
+        conAlertas++;
+      }
+      
+      procesados++;
     }
+    
+    console.log('\n═══════════════════════════════════════════════════════');
+    console.log(`📊 RESUMEN:`);
+    console.log(`   📦 Archivos CAP procesados: ${procesados}`);
+    console.log(`   ⚠️  Provincias con alertas: ${conAlertas}`);
+    console.log(`   🟢 Provincias en verde: ${52 - conAlertas}`);
+    console.log(`   📋 Total provincias: 52`);
+    console.log('═══════════════════════════════════════════════════════\n');
+    
+    // 5. Guardar en CSV
+    const nombreArchivo = guardarAlertasEnArchivo(alertasPorProvincia);
+    
+    // 6. Limpiar archivos temporales
+    limpiarDirectorioTemporal();
+    
+    actualizarEstadoSincronizacion(true, `Descarga completada: ${nombreArchivo} (${conAlertas} alertas activas)`);
+    
+    return alertasPorProvincia;
+    
+  } catch (error) {
+    console.error('❌ Error en descarga de alertas:', error.message);
+    actualizarEstadoSincronizacion(false, `Error: ${error.message}`);
+    throw error;
   }
-  
-  console.log('\n═══════════════════════════════════════════════════════');
-  console.log(`📊 RESUMEN DE DESCARGA:`);
-  console.log(`   📦 Total provincias/territorios: ${todosLosCodigos.length}`);
-  console.log(`   ✅ Consultadas con éxito: ${exitosas}`);
-  console.log(`   ⚠️  Con alertas activas: ${conAlertas}`);
-  console.log(`   ❌ Errores/Sin datos: ${fallidas}`);
-  console.log(`   🟢 Verdes: ${todosLosCodigos.length - conAlertas}`);
-  console.log('═══════════════════════════════════════════════════════\n');
-  
-  // Guardar en archivo
-  const nombreArchivo = guardarAlertasEnArchivo(alertasPorProvincia);
-  
-  const mensajeEstado = exitosas > 0 
-    ? `Descarga completada: ${nombreArchivo} (${exitosas}/${todosLosCodigos.length} provincias, ${conAlertas} con alertas)`
-    : `Error en descarga: ${fallidas} provincias fallidas`;
-  
-  actualizarEstadoSincronizacion(exitosas > 0, mensajeEstado);
-  
-  return alertasPorProvincia;
 }
 
 /**
@@ -446,7 +513,6 @@ async function obtenerAlertasAEMET(provincia, codigoPostal) {
     const codigoProv = provincia || obtenerCodigoProvincia(codigoPostal);
     
     if (!codigoProv) {
-      console.warn('No se pudo determinar la provincia para CP:', codigoPostal);
       return {
         ...NIVELES_ALERTA.verde,
         fenomeno: null,
@@ -462,7 +528,7 @@ async function obtenerAlertasAEMET(provincia, codigoPostal) {
       return cached.data;
     }
     
-    // Intentar leer desde archivo más reciente
+    // Leer desde archivo más reciente
     const archivoReciente = obtenerArchivoMasReciente();
     
     if (archivoReciente) {
@@ -476,14 +542,11 @@ async function obtenerAlertasAEMET(provincia, codigoPostal) {
           actualizacion: datosAlerta.timestamp
         };
         
-        // Guardar en cache
         cache.set(cacheKey, { data: resultado, timestamp: Date.now() });
-        
         return resultado;
       }
     }
     
-    // Si no hay datos en archivo, devolver verde
     return {
       ...NIVELES_ALERTA.verde,
       fenomeno: null,
@@ -492,7 +555,6 @@ async function obtenerAlertasAEMET(provincia, codigoPostal) {
     
   } catch (error) {
     console.error('Error obteniendo alertas AEMET:', error);
-    
     return {
       ...NIVELES_ALERTA.verde,
       fenomeno: null,
@@ -502,54 +564,44 @@ async function obtenerAlertasAEMET(provincia, codigoPostal) {
 }
 
 /**
- * Forzar actualización descargando nuevos datos de AEMET
+ * Forzar actualización
  */
 async function forzarActualizacion() {
   console.log('\n🔄 ACTUALIZACIÓN FORZADA INICIADA');
-  
-  // Limpiar cache
   cache.clear();
   console.log('🧹 Cache limpiado');
-  
-  // Descargar nuevos datos
   await descargarAlertasAEMET();
-  
   console.log('✅ Actualización forzada completada\n');
 }
 
 /**
- * Inicialización: cargar archivo más reciente o descargar datos
+ * Inicialización
  */
 async function inicializar() {
   console.log('\n🚀 Inicializando servicio de alertas AEMET...');
-  console.log(`📋 Total provincias/territorios configurados: ${Object.keys(PROVINCIAS_AEMET).length}`);
   
   const archivoReciente = obtenerArchivoMasReciente();
   
   if (archivoReciente) {
-    console.log(`📂 Encontrado archivo de alertas: ${archivoReciente}`);
+    console.log(`📂 Archivo existente: ${archivoReciente}`);
     estadoSincronizacion.archivoActual = archivoReciente;
     estadoSincronizacion.estado = 'ok';
     estadoSincronizacion.mensaje = `Usando datos de ${archivoReciente}`;
     
-    // Leer timestamp del archivo
     const match = archivoReciente.match(/alertas-(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})\.csv/);
     if (match) {
       const [, year, month, day, hour, min, sec] = match;
       estadoSincronizacion.ultimaSincronizacion = `${year}-${month}-${day}T${hour}:${min}:${sec}Z`;
     }
     
-    // Leer y mostrar resumen
     const alertas = leerAlertasDesdeArchivo(archivoReciente);
-    console.log(`✅ Servicio inicializado con ${Object.keys(alertas).length} provincias\n`);
+    console.log(`✅ ${Object.keys(alertas).length} provincias cargadas\n`);
   } else {
-    console.log('📥 No se encontraron archivos de alertas.');
-    console.log('🌐 Descargando datos iniciales de todas las provincias de España...\n');
+    console.log('📥 Descargando datos iniciales...\n');
     await descargarAlertasAEMET();
   }
 }
 
-// Inicializar al cargar el módulo
 inicializar();
 
 module.exports = {
