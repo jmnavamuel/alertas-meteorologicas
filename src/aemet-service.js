@@ -259,7 +259,7 @@ async function descargarAlertasAEMET() {
   });
   
   try {
-    const url = `${AEMET_BASE_URL}/avisos_cap/ultimoelaborado?api_key=${AEMET_API_KEY}`;
+    const url = `${AEMET_BASE_URL}/avisos_cap/ultimoelaborado/area/esp?api_key=${AEMET_API_KEY}`;
     
     const response = await fetch(url, { timeout: 15000 });
     
