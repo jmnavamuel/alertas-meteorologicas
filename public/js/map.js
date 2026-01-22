@@ -94,37 +94,45 @@ async function actualizarEstadoSincronizacion() {
 }
 
 // Actualizar estadísticas en la leyenda
-async function actualizarEstadisticas() {
-    try {
-        const response = await fetch('/api/sincronizacion/estado');
-        const estado = await response.json();
-        
-        const estadisticasDiv = document.getElementById('estadisticas');
-        
-        if (estado.estadisticas) {
-            const stats = estado.estadisticas;
-            estadisticasDiv.innerHTML = `
-                <p style="margin-bottom: 10px;"><strong>Última descarga:</strong></p>
-                <div style="font-size: 12px; margin-bottom: 5px;">
-                    📦 <strong>${stats.total}</strong> archivos CAP procesados
-                </div>
-                <div style="font-size: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
-                    <div>🔴 Rojas: <strong>${stats.rojo}</strong></div>
-                    <div>🟠 Naranjas: <strong>${stats.naranja}</strong></div>
-                    <div>🟡 Amarillas: <strong>${stats.amarillo}</strong></div>
-                    <div>🟢 Verdes: <strong>${stats.verde}</strong></div>
-                </div>
-            `;
-        } else {
-            estadisticasDiv.innerHTML = `
-                <p style="margin-bottom: 5px; font-size: 12px;">
-                    <strong>Esperando primera descarga...</strong>
-                </p>
-            `;
-        }
-    } catch (error) {
-        console.error('Error actualizando estadísticas:', error);
+function actualizarEstadisticas() {
+    const estadisticasDiv = document.getElementById('estadisticas');
+    
+    if (!todasLasSedes || todasLasSedes.length === 0) {
+        estadisticasDiv.innerHTML = `
+            <p style="margin-bottom: 5px; font-size: 12px;">
+                <strong>Cargando datos...</strong>
+            </p>
+        `;
+        return;
     }
+    
+    // Calcular estadísticas basándose en las sedes cargadas
+    const totalSedes = todasLasSedes.length;
+    const rojo = todasLasSedes.filter(s => s.alerta.nivel === 'rojo').length;
+    const naranja = todasLasSedes.filter(s => s.alerta.nivel === 'naranja').length;
+    const amarillo = todasLasSedes.filter(s => s.alerta.nivel === 'amarillo').length;
+    const verde = todasLasSedes.filter(s => s.alerta.nivel === 'verde').length;
+    const totalAlertas = rojo + naranja + amarillo;
+    
+    estadisticasDiv.innerHTML = `
+        <div style="margin-bottom: 12px; padding: 10px; background-color: #f5f5f5; border-radius: 4px;">
+            <p style="margin: 0 0 8px 0; font-size: 13px; font-weight: bold;">
+                📊 Estadísticas de Alertas
+            </p>
+            <div style="font-size: 12px; margin-bottom: 8px;">
+                <strong>Total sedes:</strong> ${totalSedes}
+            </div>
+            <div style="font-size: 12px; margin-bottom: 8px;">
+                <strong>Alertas activas:</strong> ${totalAlertas}
+            </div>
+            <div style="font-size: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px;">
+                <div>🔴 <strong>${rojo}</strong> Rojas</div>
+                <div>🟠 <strong>${naranja}</strong> Naranjas</div>
+                <div>🟡 <strong>${amarillo}</strong> Amarillas</div>
+                <div>🟢 <strong>${verde}</strong> Verdes</div>
+            </div>
+        </div>
+    `;
 }
 
 // Función para renderizar tabla de alertas activas
@@ -238,8 +246,8 @@ async function cargarSedes() {
         });
         
         renderizarTablaAlertas(sedes);
+        actualizarEstadisticas();
         await actualizarEstadoSincronizacion();
-        await actualizarEstadisticas();
         
         console.log(`✅ ${sedes.length} sedes cargadas correctamente`);
     } catch (error) {
@@ -316,9 +324,6 @@ setInterval(cargarSedes, 300000);
 
 // Actualizar estado de sincronización cada 30 segundos
 setInterval(actualizarEstadoSincronizacion, 30000);
-
-// Actualizar estadísticas cada 30 segundos
-setInterval(actualizarEstadisticas, 30000);
 
 // Funcionalidad del botón de centrar España
 document.getElementById('btnResetMap').addEventListener('click', () => {
