@@ -1,6 +1,7 @@
 const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
+const tar = require('tar');
 
 const { XMLParser } = require('fast-xml-parser');
 const AEMET_API_KEY = process.env.AEMET_API_KEY;
@@ -246,6 +247,14 @@ async function descargarAlertasAEMET() {
   console.log('═══════════════════════════════════════════════════════');
   console.log('🌐 ANALIZANDO ALERTAS AEMET (Procesado Detallado)');
   console.log('═══════════════════════════════════════════════════════\n');
+  console.log('🔄 PROCESO COMPLETO: Cada ejecución descarga datos frescos desde AEMET');
+  console.log('   - Paso 1: Descargar JSON con URL del tar.gz vigente');
+  console.log('   - Paso 2: Descargar el tar.gz desde la URL obtenida');
+  console.log('   - Paso 3: Descomprimir y procesar todas las alertas\n');
+  
+  // Limpiar caché de alertas para forzar actualización
+  cache.clear();
+  console.log('🧹 Caché de alertas limpiado para obtener datos frescos\n');
   
   const alertasPorProvincia = {};
   const todosLosCodigos = Object.keys(PROVINCIAS_AEMET);
@@ -261,11 +270,23 @@ async function descargarAlertasAEMET() {
     fs.mkdirSync(debugDir, { recursive: true });
   }
   
+  // Directorio temporal para descomprimir
+  const tempDir = path.join(DATA_DIR, 'temp');
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+  }
+  
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const tempExtractDir = path.join(tempDir, `extract-${timestamp}`);
+  
   try {
-    // Intentar primero con alertas ACTIVAS (todas las alertas activas)
+    // Paso 1: Descargar JSON inicial con la URL del tar.gz VIGENTE
+    // IMPORTANTE: Siempre descargamos el JSON fresco para obtener la URL del tar.gz actual
     let url = `${AEMET_BASE_URL}/avisos_cap/activos/area/esp?api_key=${AEMET_API_KEY}`;
     let endpointTipo = 'activos';
-    console.log(`📡 Intentando descargar ALERTAS ACTIVAS desde: ${url.replace(AEMET_API_KEY, '***')}`);
+    console.log(`📡 Paso 1: Descargando JSON fresco desde API AEMET (alertas activas)`);
+    console.log(`   URL: ${url.replace(AEMET_API_KEY, '***')}`);
+    console.log(`   ⚠️  IMPORTANTE: El nombre del tar.gz cambia con el tiempo, por eso siempre descargamos el JSON primero`);
     
     let response = await fetch(url, { timeout: 15000 });
     
@@ -274,7 +295,7 @@ async function descargarAlertasAEMET() {
       console.log(`⚠️  Endpoint de alertas activas no disponible, intentando con último elaborado...`);
       url = `${AEMET_BASE_URL}/avisos_cap/ultimoelaborado/area/esp?api_key=${AEMET_API_KEY}`;
       endpointTipo = 'ultimoelaborado';
-      console.log(`📡 Consultando API AEMET (último elaborado): ${url.replace(AEMET_API_KEY, '***')}`);
+      console.log(`📡 Paso 1: Consultando API AEMET (último elaborado): ${url.replace(AEMET_API_KEY, '***')}`);
       response = await fetch(url, { timeout: 15000 });
     }
     
@@ -284,40 +305,150 @@ async function descargarAlertasAEMET() {
     }
     
     const data = await response.json();
-    console.log(`✅ Respuesta API recibida (endpoint: ${endpointTipo}):`, JSON.stringify(data, null, 2));
+    console.log(`✅ Paso 1 completado: Respuesta API recibida (endpoint: ${endpointTipo})`);
+    console.log(`📋 Estructura de la respuesta:`, JSON.stringify(data, null, 2));
     
     // Guardar respuesta JSON para análisis
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const jsonFile = path.join(debugDir, `aemet-response-${timestamp}.json`);
     fs.writeFileSync(jsonFile, JSON.stringify(data, null, 2), 'utf-8');
     console.log(`💾 Respuesta JSON guardada en: ${jsonFile}`);
     
+    // Verificar estructura de la respuesta
+    if (data.estado !== 200) {
+      throw new Error(`La API devolvió un estado de error: ${data.estado} - ${data.descripcion || 'Sin descripción'}`);
+    }
+    
     if (!data.datos) {
-      throw new Error('La API no devolvió la URL de datos');
+      throw new Error('La API no devolvió la URL del archivo en el campo "datos"');
     }
     
-    // Paso 2: Descargar XML de alertas
-    console.log(`📥 Descargando XML desde: ${data.datos}`);
-    const datosResponse = await fetch(data.datos, { timeout: 30000 });
+    // Paso 2: Descargar el tar.gz desde la URL VIGENTE obtenida del JSON
+    // IMPORTANTE: Esta URL cambia con el tiempo, por eso siempre la obtenemos del JSON fresco
+    const datosUrl = data.datos;
+    console.log(`\n📥 Paso 2: Descargando tar.gz VIGENTE desde la URL obtenida del JSON`);
+    console.log(`   URL del tar.gz: ${datosUrl}`);
+    console.log(`   ⚠️  IMPORTANTE: Esta URL es única y cambia con cada actualización de AEMET`);
     
-    if (!datosResponse.ok) {
-      throw new Error(`Error descargando XML: ${datosResponse.status}`);
+    // Hacer la petición con redirect: 'follow' para seguir redirecciones automáticamente
+    const tarGzResponse = await fetch(datosUrl, { 
+      timeout: 60000,
+      redirect: 'follow'
+    });
+    
+    if (!tarGzResponse.ok) {
+      const errorText = await tarGzResponse.text().catch(() => 'No se pudo leer el error');
+      throw new Error(`Error descargando archivo: ${tarGzResponse.status} - ${errorText.substring(0, 200)}`);
     }
     
-    const xmlData = await datosResponse.text();
-    console.log(`✅ XML descargado (${xmlData.length} caracteres)`);
+    // Verificar el Content-Type para confirmar que es un tar.gz
+    const contentType = tarGzResponse.headers.get('content-type') || '';
+    console.log(`   Content-Type recibido: ${contentType}`);
+    console.log(`   Content-Length: ${tarGzResponse.headers.get('content-length') || 'desconocido'} bytes`);
     
-    // Guardar XML completo para análisis
-    const xmlFile = path.join(debugDir, `aemet-xml-${timestamp}.xml`);
-    fs.writeFileSync(xmlFile, xmlData, 'utf-8');
-    console.log(`💾 XML completo guardado en: ${xmlFile}`);
+    // Guardar el archivo (puede ser tar.gz o otro formato)
+    const extension = datosUrl.includes('.tar.gz') || contentType.includes('gzip') || contentType.includes('x-tar') 
+      ? 'tar.gz' 
+      : 'dat';
+    const tarGzFile = path.join(debugDir, `aemet-alertas-${timestamp}.${extension}`);
     
-    // Mostrar primeros caracteres
-    if (xmlData.length > 0) {
-      console.log(`📄 Primeros 1000 caracteres del XML:\n${xmlData.substring(0, 1000)}...`);
+    const arrayBuffer = await tarGzResponse.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    fs.writeFileSync(tarGzFile, buffer);
+    
+    console.log(`✅ Paso 2 completado: Archivo descargado (${(buffer.length / 1024).toFixed(2)} KB)`);
+    console.log(`💾 Archivo guardado en: ${tarGzFile}`);
+    
+    // Verificar que el archivo no esté vacío
+    if (buffer.length === 0) {
+      throw new Error('El archivo descargado está vacío');
+    }
+    
+    // Verificar los primeros bytes para confirmar que es un tar.gz (magic number: 0x1f 0x8b para gzip)
+    const isGzip = buffer[0] === 0x1f && buffer[1] === 0x8b;
+    console.log(`   Verificación: ${isGzip ? '✅ Parece ser un archivo gzip/tar.gz válido' : '⚠️  No parece ser un archivo gzip (magic number no coincide)'}`);
+    
+    if (!isGzip && extension === 'tar.gz') {
+      console.log(`   ⚠️  Advertencia: El archivo no tiene la firma de gzip, pero se intentará descomprimir de todas formas`);
+    }
+    
+    // Paso 3: Descomprimir el tar.gz descargado
+    // IMPORTANTE: Cada ejecución usa un directorio temporal único con timestamp
+    console.log(`\n📦 Paso 3: Descomprimiendo tar.gz descargado`);
+    console.log(`   Directorio temporal único: ${tempExtractDir}`);
+    console.log(`   ⚠️  IMPORTANTE: Cada ejecución usa un directorio temporal nuevo para evitar conflictos`);
+    fs.mkdirSync(tempExtractDir, { recursive: true });
+    
+    try {
+      await tar.extract({
+        file: tarGzFile,
+        cwd: tempExtractDir,
+        strip: 0,
+        onentry: (entry) => {
+          console.log(`   📄 Extrayendo: ${entry.path}`);
+        }
+      });
+      console.log(`✅ Paso 3 completado: Archivo descomprimido correctamente`);
+    } catch (extractError) {
+      console.error(`❌ Error al descomprimir: ${extractError.message}`);
+      console.error(`   Esto puede indicar que el archivo no es un tar.gz válido`);
+      console.error(`   Verifica el archivo guardado en: ${tarGzFile}`);
+      throw new Error(`Error descomprimiendo archivo: ${extractError.message}`);
+    }
+    
+    // Paso 4: Buscar y procesar todos los XMLs dentro del directorio descomprimido
+    // IMPORTANTE: Procesamos TODOS los XMLs del tar.gz para obtener todas las alertas vigentes
+    console.log(`\n📄 Paso 4: Buscando y procesando TODOS los archivos XML del tar.gz vigente...`);
+    
+    // Primero, listar el contenido del directorio para debug
+    function listarContenido(dir, nivel = 0) {
+      const items = fs.readdirSync(dir);
+      const indent = '  '.repeat(nivel);
+      console.log(`${indent}📁 Contenido de ${path.basename(dir)}:`);
+      for (const item of items) {
+        const itemPath = path.join(dir, item);
+        const stat = fs.statSync(itemPath);
+        if (stat.isDirectory()) {
+          console.log(`${indent}  📁 ${item}/`);
+          if (nivel < 2) { // Limitar profundidad para no saturar logs
+            listarContenido(itemPath, nivel + 1);
+          }
+        } else {
+          console.log(`${indent}  📄 ${item} (${(stat.size / 1024).toFixed(2)} KB)`);
+        }
+      }
+    }
+    
+    listarContenido(tempExtractDir);
+    
+    function buscarArchivosXML(dir, archivos = []) {
+      const items = fs.readdirSync(dir);
+      for (const item of items) {
+        const itemPath = path.join(dir, item);
+        const stat = fs.statSync(itemPath);
+        if (stat.isDirectory()) {
+          buscarArchivosXML(itemPath, archivos);
+        } else if (item.endsWith('.xml') || item.endsWith('.XML') || item.endsWith('.cap') || item.endsWith('.CAP')) {
+          archivos.push(itemPath);
+        }
+      }
+      return archivos;
+    }
+    
+    const archivosXML = buscarArchivosXML(tempExtractDir);
+    console.log(`\n✅ Encontrados ${archivosXML.length} archivos XML/CAP para procesar`);
+    
+    if (archivosXML.length === 0) {
+      console.log(`⚠️  No se encontraron archivos XML/CAP en el directorio descomprimido`);
+      console.log(`💡 El archivo puede tener una estructura diferente a la esperada`);
+      console.log(`💡 Revisa el contenido completo en: ${tempExtractDir}`);
+    } else {
+      console.log(`📋 Archivos encontrados:`);
+      archivosXML.forEach((archivo, idx) => {
+        console.log(`   ${idx + 1}. ${path.relative(tempExtractDir, archivo)}`);
+      });
     }
 
-    // Paso 3: Parsear XML
+    // Paso 5: Procesar cada archivo XML
     const parser = new XMLParser({ 
       ignoreAttributes: false, 
       attributeNamePrefix: "@_",
@@ -326,56 +457,63 @@ async function descargarAlertasAEMET() {
       parseAttributeValue: true
     });
     
-    const result = parser.parse(xmlData);
-    
-    // Guardar JSON parseado para análisis
-    const parsedFile = path.join(debugDir, `aemet-parsed-${timestamp}.json`);
-    fs.writeFileSync(parsedFile, JSON.stringify(result, null, 2), 'utf-8');
-    console.log(`💾 JSON parseado guardado en: ${parsedFile}`);
-    
-    console.log(`📊 Estructura parseada (primeros 2000 caracteres):`, JSON.stringify(result, null, 2).substring(0, 2000));
-
-    // Paso 4: Extraer entradas del feed (manejar diferentes estructuras)
-    let entries = [];
-    
-    // Intentar diferentes estructuras posibles del XML
-    if (result.feed) {
-      if (result.feed.entry) {
-        entries = Array.isArray(result.feed.entry) ? result.feed.entry : [result.feed.entry];
-      } else if (result.feed.item) {
-        entries = Array.isArray(result.feed.item) ? result.feed.item : [result.feed.item];
-      } else if (result.feed.alert) {
-        entries = Array.isArray(result.feed.alert) ? result.feed.alert : [result.feed.alert];
-      }
-    } else if (result.entry) {
-      entries = Array.isArray(result.entry) ? result.entry : [result.entry];
-    } else if (result.item) {
-      entries = Array.isArray(result.item) ? result.item : [result.item];
-    } else if (result.alert) {
-      entries = Array.isArray(result.alert) ? result.alert : [result.alert];
-    } else if (result.alerts) {
-      entries = Array.isArray(result.alerts) ? result.alerts : [result.alerts];
-    } else if (Array.isArray(result)) {
-      entries = result;
-    }
-
-    console.log(`📥 Analizando ${entries.length} entradas del feed...`);
-    console.log(`📋 Estructura del XML recibido:`, JSON.stringify(Object.keys(result), null, 2));
-    
-    if (entries.length === 0) {
-      console.log('⚠️ No se encontraron entradas en el feed XML');
-      console.log('📋 Estructura completa del XML (primer nivel):', Object.keys(result));
-      if (result.feed) {
-        console.log('📋 Estructura del feed:', Object.keys(result.feed));
-      }
-      console.log('💡 Revisa los archivos guardados en data/debug/ para analizar la estructura completa');
-    }
-    
     let procesadas = 0;
     let detectadas = 0;
     let sinProvincia = 0;
+    let xmlsProcesados = 0;
     
-    entries.forEach((entry, index) => {
+    for (const xmlFile of archivosXML) {
+      xmlsProcesados++;
+      console.log(`\n📄 Procesando XML ${xmlsProcesados}/${archivosXML.length}: ${path.basename(xmlFile)}`);
+      
+      try {
+        const xmlData = fs.readFileSync(xmlFile, 'utf-8');
+        const result = parser.parse(xmlData);
+        
+        // Guardar JSON parseado del primer XML para análisis
+        if (xmlsProcesados === 1) {
+          const parsedFile = path.join(debugDir, `aemet-parsed-${timestamp}.json`);
+          fs.writeFileSync(parsedFile, JSON.stringify(result, null, 2), 'utf-8');
+          console.log(`💾 JSON parseado (primer XML) guardado en: ${parsedFile}`);
+          console.log(`📊 Estructura del XML (primeros 1000 caracteres):`, JSON.stringify(result, null, 2).substring(0, 1000));
+        }
+        
+        // Extraer entradas del feed (manejar diferentes estructuras)
+        let entries = [];
+        
+        // Intentar diferentes estructuras posibles del XML
+        if (result.feed) {
+          if (result.feed.entry) {
+            entries = Array.isArray(result.feed.entry) ? result.feed.entry : [result.feed.entry];
+          } else if (result.feed.item) {
+            entries = Array.isArray(result.feed.item) ? result.feed.item : [result.feed.item];
+          } else if (result.feed.alert) {
+            entries = Array.isArray(result.feed.alert) ? result.feed.alert : [result.feed.alert];
+          }
+        } else if (result.entry) {
+          entries = Array.isArray(result.entry) ? result.entry : [result.entry];
+        } else if (result.item) {
+          entries = Array.isArray(result.item) ? result.item : [result.item];
+        } else if (result.alert) {
+          entries = Array.isArray(result.alert) ? result.alert : [result.alert];
+        } else if (result.alerts) {
+          entries = Array.isArray(result.alerts) ? result.alerts : [result.alerts];
+        } else if (Array.isArray(result)) {
+          entries = result;
+        }
+        
+        console.log(`   📥 Encontradas ${entries.length} entradas en este XML`);
+        
+        if (entries.length === 0 && xmlsProcesados === 1) {
+          console.log('   ⚠️ No se encontraron entradas en el feed XML');
+          console.log('   📋 Estructura del XML (primer nivel):', Object.keys(result));
+          if (result.feed) {
+            console.log('   📋 Estructura del feed:', Object.keys(result.feed));
+          }
+        }
+        
+        // Procesar cada entrada del XML
+        entries.forEach((entry, index) => {
       procesadas++;
       
       // Extraer título de diferentes estructuras posibles
@@ -525,12 +663,22 @@ async function descargarAlertasAEMET() {
           console.log(`   ⏭️  Alerta ignorada (nivel ${nivel} no supera ${nivelActual})`);
         }
       }
-    });
+        });
+        
+      } catch (error) {
+        console.error(`   ❌ Error procesando XML ${path.basename(xmlFile)}: ${error.message}`);
+      }
+    }
     
     console.log(`\n📊 Resumen del procesado:`);
+    console.log(`   ✅ Proceso completo ejecutado desde cero`);
+    console.log(`   ✅ JSON descargado: ${jsonFile}`);
+    console.log(`   ✅ tar.gz descargado: ${path.basename(tarGzFile)}`);
+    console.log(`   - Archivos XML procesados: ${xmlsProcesados}`);
     console.log(`   - Entradas procesadas: ${procesadas}`);
     console.log(`   - Alertas detectadas: ${detectadas}`);
     console.log(`   - Sin provincia identificada: ${sinProvincia}`);
+    console.log(`\n💡 NOTA: Cada ejecución descarga datos frescos. El tar.gz cambia de nombre con el tiempo.`);
     
     // Feedback por consola
     let conAlertas = 0;
@@ -553,12 +701,34 @@ async function descargarAlertasAEMET() {
 
     guardarAlertasEnArchivo(alertasPorProvincia);
     actualizarEstadoSincronizacion(true, `Sincronizado: ${conAlertas} alertas.`);
+    
+    // Limpiar archivos temporales
+    console.log(`\n🧹 Limpiando archivos temporales...`);
+    try {
+      if (fs.existsSync(tempExtractDir)) {
+        fs.rmSync(tempExtractDir, { recursive: true, force: true });
+        console.log(`✅ Directorio temporal eliminado: ${tempExtractDir}`);
+      }
+    } catch (cleanupError) {
+      console.warn(`⚠️  No se pudo eliminar el directorio temporal: ${cleanupError.message}`);
+    }
+    
     return alertasPorProvincia;
     
   } catch (error) {
     console.error(`❌ Error: ${error.message}`);
     console.error(`📋 Stack:`, error.stack);
     actualizarEstadoSincronizacion(false, `Error: ${error.message}`);
+    
+    // Limpiar archivos temporales incluso en caso de error
+    try {
+      if (fs.existsSync(tempExtractDir)) {
+        fs.rmSync(tempExtractDir, { recursive: true, force: true });
+      }
+    } catch (cleanupError) {
+      // Ignorar errores de limpieza
+    }
+    
     throw error;
   }
 }
