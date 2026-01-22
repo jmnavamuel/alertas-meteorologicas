@@ -5,29 +5,14 @@ RUN apk add --no-cache wget ca-certificates
 
 WORKDIR /app
 
-# Copiar package files
+# 1. Copiamos solo los archivos de dependencias para aprovechar la caché de capas de Docker
 COPY package*.json ./
 
-# Instalar dependencias
-RUN npm cache clean --force && \
-    npm install --production --no-optional
+# 2. Instalamos TODAS las dependencias (quitamos --production para tener nodemon)
+RUN npm install
 
-# Copiar archivos del proyecto
-COPY src/ ./src/
-COPY public/ ./public/
-COPY data/ ./data/
-
-# Verificar estructura
-RUN ls -la /app && \
-    ls -la /app/src && \
-    ls -la /app/public && \
-    ls -la /app/data
-
+# 3. Exponemos el puerto
 EXPOSE 3100
 
-# Healthcheck
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3100/health || exit 1
-
-# Ejecutar aplicación
-CMD ["node", "src/server.js"]
+# 4. El comando por defecto será el script de desarrollo con nodemon
+CMD ["npm", "run", "dev"]

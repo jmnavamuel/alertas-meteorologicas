@@ -2,6 +2,7 @@ const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
 
+const { XMLParser } = require('fast-xml-parser');
 const AEMET_API_KEY = process.env.AEMET_API_KEY;
 const AEMET_BASE_URL = 'https://opendata.aemet.es/opendata/api';
 const DATA_DIR = path.join(__dirname, '../data');
@@ -243,102 +244,104 @@ function mapearNivelAlerta(nivelTexto) {
 
 async function descargarAlertasAEMET() {
   console.log('═══════════════════════════════════════════════════════');
-  console.log('🌐 DESCARGANDO ALERTAS AEMET');
+  console.log('🌐 ANALIZANDO ALERTAS AEMET (Procesado Detallado)');
   console.log('═══════════════════════════════════════════════════════\n');
   
   const alertasPorProvincia = {};
   const todosLosCodigos = Object.keys(PROVINCIAS_AEMET);
   
-  // Inicializar todas en verde
+  // Inicializar todo en verde
   todosLosCodigos.forEach(codigo => {
-    alertasPorProvincia[codigo] = {
-      nivel: 'verde',
-      fenomeno: null,
-      timestamp: new Date().toISOString()
-    };
+    alertasPorProvincia[codigo] = { nivel: 'verde', fenomeno: null, timestamp: new Date().toISOString() };
   });
   
   try {
     const url = `${AEMET_BASE_URL}/avisos_cap/ultimoelaborado/area/esp?api_key=${AEMET_API_KEY}`;
-    
     const response = await fetch(url, { timeout: 15000 });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    
     const data = await response.json();
     
-    if (!data.datos) {
-      throw new Error('Sin URL de datos');
-    }
-    
     const datosResponse = await fetch(data.datos, { timeout: 15000 });
-    const alertas = await datosResponse.json();
+    const xmlData = await datosResponse.text();
+
+    const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
+    const result = parser.parse(xmlData);
+
+    let entries = [];
+    if (result.feed && result.feed.entry) {
+      entries = Array.isArray(result.feed.entry) ? result.feed.entry : [result.feed.entry];
+    }
+
+    console.log(`📥 Analizando ${entries.length} entradas del feed...`);
     
-    console.log(`📥 Descargadas ${alertas.length} alertas\n`);
-    
-    let procesadas = 0;
-    let conAlertas = 0;
-    
-    alertas.forEach(alerta => {
-      // Extraer zona/provincia
-      const zona = alerta.areaDesc || alerta.properties?.areaDesc || '';
-      const codigoProv = extraerCodigoProvinciaDeZona(zona);
+    entries.forEach(entry => {
+      const titulo = (entry.title || "").toString();
+      const resumen = (entry.summary || "").toString();
+      const textoCompleto = `${titulo} ${resumen}`; // Buscamos en ambos campos
+
+      // 1. Determinar el nivel de riesgo
+      let nivel = 'verde';
+      const tLower = textoCompleto.toLowerCase();
       
-      if (!codigoProv) {
-        return;
-      }
-      
-      // Extraer nivel
-      const severity = alerta.severity || alerta.properties?.severity || 'Minor';
-      const nivel = mapearNivelAlerta(severity);
-      
-      // Extraer fenómeno
-      const fenomeno = alerta.event || alerta.properties?.event || 'Alerta meteorológica';
-      
-      // Actualizar si es mayor prioridad
-      const prioridad = { rojo: 4, naranja: 3, amarillo: 2, verde: 1 };
-      const nivelActual = alertasPorProvincia[codigoProv].nivel;
-      
-      if (prioridad[nivel] > prioridad[nivelActual]) {
-        alertasPorProvincia[codigoProv] = {
-          nivel,
-          fenomeno,
-          timestamp: new Date().toISOString()
-        };
+      if (tLower.includes('rojo') || tLower.includes('extremo')) nivel = 'rojo';
+      else if (tLower.includes('naranja') || tLower.includes('importante')) nivel = 'naranja';
+      else if (tLower.includes('amarillo') || tLower.includes('riesgo')) nivel = 'amarillo';
+
+      if (nivel === 'verde') return;
+
+      // 2. Identificar la provincia (Normalización básica para evitar fallos por tildes/mayúsculas)
+      let codigoProv = null;
+      const textoNormalizado = textoCompleto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+      for (const [nombreProv, codigo] of Object.entries(MAPA_PROVINCIAS_ALERTAS)) {
+        const nombreNormalizado = nombreProv.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
         
-        procesadas++;
+        if (textoNormalizado.includes(nombreNormalizado)) {
+          codigoProv = codigo;
+          break;
+        }
+      }
+
+      // 3. Extraer fenómeno
+      const matchFenomeno = titulo.match(/por\s(.*?)\sen/i) || resumen.match(/por\s(.*?)\sen/i);
+      const fenomeno = matchFenomeno ? matchFenomeno[1].trim() : 'Fenómeno adverso';
+
+      if (codigoProv) {
+        const prioridad = { rojo: 4, naranja: 3, amarillo: 2, verde: 1 };
+        const nivelActual = alertasPorProvincia[codigoProv].nivel;
+        
+        if (prioridad[nivel] > prioridad[nivelActual]) {
+          alertasPorProvincia[codigoProv] = {
+            nivel,
+            fenomeno: fenomeno.charAt(0).toUpperCase() + fenomeno.slice(1),
+            timestamp: new Date().toISOString()
+          };
+        }
       }
     });
     
-    // Contar alertas activas
+    // Feedback por consola
+    let conAlertas = 0;
     todosLosCodigos.forEach(codigo => {
       if (alertasPorProvincia[codigo].nivel !== 'verde') {
-        const nombreProv = PROVINCIAS_AEMET[codigo];
         const datos = alertasPorProvincia[codigo];
         const emoji = datos.nivel === 'rojo' ? '🔴' : datos.nivel === 'naranja' ? '🟠' : '🟡';
-        console.log(`${emoji} [${codigo}] ${nombreProv}: ${datos.nivel.toUpperCase()} - ${datos.fenomeno}`);
+        console.log(`${emoji} [${codigo}] ${PROVINCIAS_AEMET[codigo]}: ${datos.nivel.toUpperCase()} - ${datos.fenomeno}`);
         conAlertas++;
       }
     });
     
-    console.log(`\n═══════════════════════════════════════════════════════`);
-    console.log(`📊 Total alertas: ${conAlertas} | Verdes: ${52 - conAlertas}`);
-    console.log(`═══════════════════════════════════════════════════════\n`);
-    
-    const nombreArchivo = guardarAlertasEnArchivo(alertasPorProvincia);
-    actualizarEstadoSincronizacion(true, `${nombreArchivo} (${conAlertas} alertas)`);
-    
+    if (conAlertas === 0) console.log("⚠️ No se han detectado alertas activas en el procesado.");
+
+    guardarAlertasEnArchivo(alertasPorProvincia);
+    actualizarEstadoSincronizacion(true, `Sincronizado: ${conAlertas} alertas.`);
     return alertasPorProvincia;
     
   } catch (error) {
-    console.error(`❌ Error: ${error.message}\n`);
+    console.error(`❌ Error: ${error.message}`);
     actualizarEstadoSincronizacion(false, `Error: ${error.message}`);
     throw error;
   }
 }
-
 async function obtenerAlertasAEMET(provincia, codigoPostal) {
   try {
     const codigoProv = provincia || obtenerCodigoProvincia(codigoPostal);
