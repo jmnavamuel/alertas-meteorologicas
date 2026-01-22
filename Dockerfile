@@ -1,17 +1,19 @@
 FROM node:18-alpine
 
-# Instalar herramientas básicas
-RUN apk add --no-cache wget ca-certificates
+# Instalar dependencias del sistema necesarias para compilar paquetes
+RUN apk add --no-cache wget ca-certificates python3 make g++
 
 WORKDIR /app
 
-# 1. Copiamos solo los archivos de dependencias para aprovechar la caché de capas de Docker
+# 1. Copiamos solo los archivos de dependencias
 COPY package*.json ./
 
-# 2. Instalamos TODAS las dependencias (quitamos --production para tener nodemon)
-RUN npm install
+# 2. LIMPIEZA Y DESCARGA: 
+# Forzamos la limpieza de caché y usamos --legacy-peer-deps para evitar conflictos de red/versión
+RUN npm cache clean --force && \
+    npm install --legacy-peer-deps
 
-# 3. Copiamos los archivos fuente (los volúmenes los sobrescribirán en desarrollo)
+# 3. Copiamos los archivos fuente (serán sobrescritos por volúmenes en dev)
 COPY src/ ./src/
 COPY public/ ./public/
 COPY data/ ./data/
@@ -19,5 +21,5 @@ COPY data/ ./data/
 # 4. Exponemos el puerto
 EXPOSE 3100
 
-# 5. El comando por defecto será el script de desarrollo con nodemon
+# 5. Comando de ejecución
 CMD ["npm", "run", "dev"]
