@@ -255,12 +255,28 @@ async function descargarAlertasAEMET() {
     alertasPorProvincia[codigo] = { nivel: 'verde', fenomeno: null, timestamp: new Date().toISOString() };
   });
   
+  // Crear directorio de debug si no existe
+  const debugDir = path.join(DATA_DIR, 'debug');
+  if (!fs.existsSync(debugDir)) {
+    fs.mkdirSync(debugDir, { recursive: true });
+  }
+  
   try {
-    // Paso 1: Obtener URL de datos
-    const url = `${AEMET_BASE_URL}/avisos_cap/ultimoelaborado/area/esp?api_key=${AEMET_API_KEY}`;
-    console.log(`📡 Consultando API AEMET: ${url.replace(AEMET_API_KEY, '***')}`);
+    // Intentar primero con alertas ACTIVAS (todas las alertas activas)
+    let url = `${AEMET_BASE_URL}/avisos_cap/activos/area/esp?api_key=${AEMET_API_KEY}`;
+    let endpointTipo = 'activos';
+    console.log(`📡 Intentando descargar ALERTAS ACTIVAS desde: ${url.replace(AEMET_API_KEY, '***')}`);
     
-    const response = await fetch(url, { timeout: 15000 });
+    let response = await fetch(url, { timeout: 15000 });
+    
+    // Si falla, intentar con último elaborado como fallback
+    if (!response.ok || response.status === 404) {
+      console.log(`⚠️  Endpoint de alertas activas no disponible, intentando con último elaborado...`);
+      url = `${AEMET_BASE_URL}/avisos_cap/ultimoelaborado/area/esp?api_key=${AEMET_API_KEY}`;
+      endpointTipo = 'ultimoelaborado';
+      console.log(`📡 Consultando API AEMET (último elaborado): ${url.replace(AEMET_API_KEY, '***')}`);
+      response = await fetch(url, { timeout: 15000 });
+    }
     
     if (!response.ok) {
       const errorText = await response.text();
@@ -268,7 +284,13 @@ async function descargarAlertasAEMET() {
     }
     
     const data = await response.json();
-    console.log(`✅ Respuesta API recibida:`, JSON.stringify(data, null, 2));
+    console.log(`✅ Respuesta API recibida (endpoint: ${endpointTipo}):`, JSON.stringify(data, null, 2));
+    
+    // Guardar respuesta JSON para análisis
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const jsonFile = path.join(debugDir, `aemet-response-${timestamp}.json`);
+    fs.writeFileSync(jsonFile, JSON.stringify(data, null, 2), 'utf-8');
+    console.log(`💾 Respuesta JSON guardada en: ${jsonFile}`);
     
     if (!data.datos) {
       throw new Error('La API no devolvió la URL de datos');
@@ -276,7 +298,7 @@ async function descargarAlertasAEMET() {
     
     // Paso 2: Descargar XML de alertas
     console.log(`📥 Descargando XML desde: ${data.datos}`);
-    const datosResponse = await fetch(data.datos, { timeout: 15000 });
+    const datosResponse = await fetch(data.datos, { timeout: 30000 });
     
     if (!datosResponse.ok) {
       throw new Error(`Error descargando XML: ${datosResponse.status}`);
@@ -285,9 +307,14 @@ async function descargarAlertasAEMET() {
     const xmlData = await datosResponse.text();
     console.log(`✅ XML descargado (${xmlData.length} caracteres)`);
     
-    // Guardar XML para debugging (opcional, solo primeros 500 caracteres)
+    // Guardar XML completo para análisis
+    const xmlFile = path.join(debugDir, `aemet-xml-${timestamp}.xml`);
+    fs.writeFileSync(xmlFile, xmlData, 'utf-8');
+    console.log(`💾 XML completo guardado en: ${xmlFile}`);
+    
+    // Mostrar primeros caracteres
     if (xmlData.length > 0) {
-      console.log(`📄 Primeros 500 caracteres del XML:\n${xmlData.substring(0, 500)}...`);
+      console.log(`📄 Primeros 1000 caracteres del XML:\n${xmlData.substring(0, 1000)}...`);
     }
 
     // Paso 3: Parsear XML
@@ -300,21 +327,48 @@ async function descargarAlertasAEMET() {
     });
     
     const result = parser.parse(xmlData);
-    console.log(`📊 Estructura parseada:`, JSON.stringify(result, null, 2).substring(0, 1000));
+    
+    // Guardar JSON parseado para análisis
+    const parsedFile = path.join(debugDir, `aemet-parsed-${timestamp}.json`);
+    fs.writeFileSync(parsedFile, JSON.stringify(result, null, 2), 'utf-8');
+    console.log(`💾 JSON parseado guardado en: ${parsedFile}`);
+    
+    console.log(`📊 Estructura parseada (primeros 2000 caracteres):`, JSON.stringify(result, null, 2).substring(0, 2000));
 
-    // Paso 4: Extraer entradas del feed
+    // Paso 4: Extraer entradas del feed (manejar diferentes estructuras)
     let entries = [];
-    if (result.feed && result.feed.entry) {
-      entries = Array.isArray(result.feed.entry) ? result.feed.entry : [result.feed.entry];
+    
+    // Intentar diferentes estructuras posibles del XML
+    if (result.feed) {
+      if (result.feed.entry) {
+        entries = Array.isArray(result.feed.entry) ? result.feed.entry : [result.feed.entry];
+      } else if (result.feed.item) {
+        entries = Array.isArray(result.feed.item) ? result.feed.item : [result.feed.item];
+      } else if (result.feed.alert) {
+        entries = Array.isArray(result.feed.alert) ? result.feed.alert : [result.feed.alert];
+      }
     } else if (result.entry) {
       entries = Array.isArray(result.entry) ? result.entry : [result.entry];
+    } else if (result.item) {
+      entries = Array.isArray(result.item) ? result.item : [result.item];
+    } else if (result.alert) {
+      entries = Array.isArray(result.alert) ? result.alert : [result.alert];
+    } else if (result.alerts) {
+      entries = Array.isArray(result.alerts) ? result.alerts : [result.alerts];
+    } else if (Array.isArray(result)) {
+      entries = result;
     }
 
     console.log(`📥 Analizando ${entries.length} entradas del feed...`);
+    console.log(`📋 Estructura del XML recibido:`, JSON.stringify(Object.keys(result), null, 2));
     
     if (entries.length === 0) {
       console.log('⚠️ No se encontraron entradas en el feed XML');
-      console.log('📋 Estructura del XML recibido:', Object.keys(result));
+      console.log('📋 Estructura completa del XML (primer nivel):', Object.keys(result));
+      if (result.feed) {
+        console.log('📋 Estructura del feed:', Object.keys(result.feed));
+      }
+      console.log('💡 Revisa los archivos guardados en data/debug/ para analizar la estructura completa');
     }
     
     let procesadas = 0;
@@ -323,13 +377,44 @@ async function descargarAlertasAEMET() {
     
     entries.forEach((entry, index) => {
       procesadas++;
-      const titulo = (entry.title || entry['#text'] || entry['title'] || "").toString();
-      const resumen = (entry.summary || entry['summary'] || "").toString();
+      
+      // Extraer título de diferentes estructuras posibles
+      let titulo = '';
+      if (entry.title) {
+        titulo = typeof entry.title === 'string' ? entry.title : 
+                 (entry.title['#text'] || entry.title.text || JSON.stringify(entry.title));
+      } else if (entry.name) {
+        titulo = typeof entry.name === 'string' ? entry.name : 
+                 (entry.name['#text'] || entry.name.text || JSON.stringify(entry.name));
+      } else if (entry.headline) {
+        titulo = typeof entry.headline === 'string' ? entry.headline : 
+                 (entry.headline['#text'] || entry.headline.text || JSON.stringify(entry.headline));
+      } else if (entry['#text']) {
+        titulo = entry['#text'];
+      }
+      titulo = titulo.toString().trim();
+      
+      // Extraer resumen de diferentes estructuras posibles
+      let resumen = '';
+      if (entry.summary) {
+        resumen = typeof entry.summary === 'string' ? entry.summary : 
+                  (entry.summary['#text'] || entry.summary.text || JSON.stringify(entry.summary));
+      } else if (entry.description) {
+        resumen = typeof entry.description === 'string' ? entry.description : 
+                  (entry.description['#text'] || entry.description.text || JSON.stringify(entry.description));
+      } else if (entry.content) {
+        resumen = typeof entry.content === 'string' ? entry.content : 
+                  (entry.content['#text'] || entry.content.text || JSON.stringify(entry.content));
+      }
+      resumen = resumen.toString().trim();
+      
       const textoCompleto = `${titulo} ${resumen}`;
       
       console.log(`\n📝 Entrada ${index + 1}:`);
-      console.log(`   Título: ${titulo}`);
-      console.log(`   Resumen: ${resumen.substring(0, 100)}...`);
+      console.log(`   Estructura:`, Object.keys(entry));
+      console.log(`   Título: ${titulo || '(vacío)'}`);
+      console.log(`   Resumen: ${resumen ? resumen.substring(0, 200) + '...' : '(vacío)'}`);
+      console.log(`   Texto completo: ${textoCompleto.substring(0, 300)}...`);
 
       // 1. Determinar el nivel de riesgo (búsqueda más exhaustiva)
       let nivel = 'verde';
