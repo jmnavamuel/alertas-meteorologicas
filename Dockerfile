@@ -11,8 +11,13 @@ COPY package*.json ./
 # 2. Instalamos TODAS las dependencias (quitamos --production para tener nodemon)
 RUN npm install
 
-# 3. Exponemos el puerto
+# 3. Copiamos los archivos fuente (los volúmenes los sobrescribirán en desarrollo)
+COPY src/ ./src/
+COPY public/ ./public/
+COPY data/ ./data/
+
+# 4. Exponemos el puerto
 EXPOSE 3100
 
-# 4. El comando por defecto será el script de desarrollo con nodemon
+# 5. El comando por defecto será el script de desarrollo con nodemon
 CMD ["npm", "run", "dev"]
