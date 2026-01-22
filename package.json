@@ -12,7 +12,7 @@
     "fast-xml-parser": "^4.3.6",
     "csv-parser": "^3.0.0",
     "cors": "^2.8.5",
-    "node-fetch": "^2.7.1",
+    "node-fetch": "2.7.1",
     "dotenv": "^16.4.7",
     "tar": "^7.4.3"
   },
