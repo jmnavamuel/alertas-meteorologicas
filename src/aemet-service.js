@@ -256,55 +256,175 @@ async function descargarAlertasAEMET() {
   });
   
   try {
+    // Paso 1: Obtener URL de datos
     const url = `${AEMET_BASE_URL}/avisos_cap/ultimoelaborado/area/esp?api_key=${AEMET_API_KEY}`;
-    const response = await fetch(url, { timeout: 15000 });
-    const data = await response.json();
+    console.log(`📡 Consultando API AEMET: ${url.replace(AEMET_API_KEY, '***')}`);
     
+    const response = await fetch(url, { timeout: 15000 });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Error HTTP ${response.status}: ${errorText}`);
+    }
+    
+    const data = await response.json();
+    console.log(`✅ Respuesta API recibida:`, JSON.stringify(data, null, 2));
+    
+    if (!data.datos) {
+      throw new Error('La API no devolvió la URL de datos');
+    }
+    
+    // Paso 2: Descargar XML de alertas
+    console.log(`📥 Descargando XML desde: ${data.datos}`);
     const datosResponse = await fetch(data.datos, { timeout: 15000 });
+    
+    if (!datosResponse.ok) {
+      throw new Error(`Error descargando XML: ${datosResponse.status}`);
+    }
+    
     const xmlData = await datosResponse.text();
+    console.log(`✅ XML descargado (${xmlData.length} caracteres)`);
+    
+    // Guardar XML para debugging (opcional, solo primeros 500 caracteres)
+    if (xmlData.length > 0) {
+      console.log(`📄 Primeros 500 caracteres del XML:\n${xmlData.substring(0, 500)}...`);
+    }
 
-    const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
+    // Paso 3: Parsear XML
+    const parser = new XMLParser({ 
+      ignoreAttributes: false, 
+      attributeNamePrefix: "@_",
+      textNodeName: "#text",
+      ignoreNameSpace: true,
+      parseAttributeValue: true
+    });
+    
     const result = parser.parse(xmlData);
+    console.log(`📊 Estructura parseada:`, JSON.stringify(result, null, 2).substring(0, 1000));
 
+    // Paso 4: Extraer entradas del feed
     let entries = [];
     if (result.feed && result.feed.entry) {
       entries = Array.isArray(result.feed.entry) ? result.feed.entry : [result.feed.entry];
+    } else if (result.entry) {
+      entries = Array.isArray(result.entry) ? result.entry : [result.entry];
     }
 
     console.log(`📥 Analizando ${entries.length} entradas del feed...`);
     
-    entries.forEach(entry => {
-      const titulo = (entry.title || "").toString();
-      const resumen = (entry.summary || "").toString();
-      const textoCompleto = `${titulo} ${resumen}`; // Buscamos en ambos campos
+    if (entries.length === 0) {
+      console.log('⚠️ No se encontraron entradas en el feed XML');
+      console.log('📋 Estructura del XML recibido:', Object.keys(result));
+    }
+    
+    let procesadas = 0;
+    let detectadas = 0;
+    let sinProvincia = 0;
+    
+    entries.forEach((entry, index) => {
+      procesadas++;
+      const titulo = (entry.title || entry['#text'] || entry['title'] || "").toString();
+      const resumen = (entry.summary || entry['summary'] || "").toString();
+      const textoCompleto = `${titulo} ${resumen}`;
+      
+      console.log(`\n📝 Entrada ${index + 1}:`);
+      console.log(`   Título: ${titulo}`);
+      console.log(`   Resumen: ${resumen.substring(0, 100)}...`);
 
-      // 1. Determinar el nivel de riesgo
+      // 1. Determinar el nivel de riesgo (búsqueda más exhaustiva)
       let nivel = 'verde';
       const tLower = textoCompleto.toLowerCase();
       
-      if (tLower.includes('rojo') || tLower.includes('extremo')) nivel = 'rojo';
-      else if (tLower.includes('naranja') || tLower.includes('importante')) nivel = 'naranja';
-      else if (tLower.includes('amarillo') || tLower.includes('riesgo')) nivel = 'amarillo';
+      // Búsqueda de nivel rojo
+      if (tLower.includes('rojo') || 
+          tLower.includes('extremo') || 
+          tLower.includes('nivel rojo') ||
+          tLower.includes('riesgo extremo') ||
+          tLower.match(/nivel\s*4/i)) {
+        nivel = 'rojo';
+      }
+      // Búsqueda de nivel naranja
+      else if (tLower.includes('naranja') || 
+               tLower.includes('importante') || 
+               tLower.includes('nivel naranja') ||
+               tLower.includes('riesgo importante') ||
+               tLower.match(/nivel\s*3/i)) {
+        nivel = 'naranja';
+      }
+      // Búsqueda de nivel amarillo
+      else if (tLower.includes('amarillo') || 
+               tLower.includes('riesgo') ||
+               tLower.includes('nivel amarillo') ||
+               tLower.match(/nivel\s*2/i) ||
+               tLower.includes('advertencia')) {
+        nivel = 'amarillo';
+      }
 
-      if (nivel === 'verde') return;
+      console.log(`   🔍 Nivel detectado: ${nivel}`);
 
-      // 2. Identificar la provincia (Normalización básica para evitar fallos por tildes/mayúsculas)
+      if (nivel === 'verde') {
+        console.log(`   ⏭️  Saltando entrada (sin alerta)`);
+        return;
+      }
+
+      detectadas++;
+
+      // 2. Identificar la provincia (búsqueda mejorada)
       let codigoProv = null;
       const textoNormalizado = textoCompleto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
+      // Buscar provincia en el mapa
       for (const [nombreProv, codigo] of Object.entries(MAPA_PROVINCIAS_ALERTAS)) {
         const nombreNormalizado = nombreProv.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
         
-        if (textoNormalizado.includes(nombreNormalizado)) {
+        // Búsqueda exacta y parcial
+        if (textoNormalizado.includes(nombreNormalizado) ||
+            textoNormalizado.includes(nombreNormalizado.split(' ')[0]) ||
+            textoNormalizado.includes(nombreNormalizado.split('/')[0])) {
           codigoProv = codigo;
+          console.log(`   📍 Provincia detectada: ${nombreProv} (${codigo})`);
           break;
         }
       }
+      
+      // Si no se encontró, buscar por código de provincia en el texto
+      if (!codigoProv) {
+        const codigoMatch = textoCompleto.match(/\b([0-5][0-9])\b/);
+        if (codigoMatch && PROVINCIAS_AEMET[codigoMatch[1]]) {
+          codigoProv = codigoMatch[1];
+          console.log(`   📍 Provincia detectada por código: ${codigoProv}`);
+        }
+      }
+
+      if (!codigoProv) {
+        sinProvincia++;
+        console.log(`   ⚠️  No se pudo identificar la provincia para: "${titulo}"`);
+        return;
+      }
 
       // 3. Extraer fenómeno
-      const matchFenomeno = titulo.match(/por\s(.*?)\sen/i) || resumen.match(/por\s(.*?)\sen/i);
-      const fenomeno = matchFenomeno ? matchFenomeno[1].trim() : 'Fenómeno adverso';
+      let fenomeno = 'Fenómeno adverso';
+      const matchFenomeno = titulo.match(/por\s+(.*?)\s+en/i) || 
+                           resumen.match(/por\s+(.*?)\s+en/i) ||
+                           titulo.match(/alerta\s+por\s+(.*?)(?:\.|$)/i) ||
+                           resumen.match(/alerta\s+por\s+(.*?)(?:\.|$)/i);
+      
+      if (matchFenomeno) {
+        fenomeno = matchFenomeno[1].trim();
+      } else {
+        // Intentar extraer fenómeno común
+        const fenomenosComunes = ['viento', 'lluvia', 'nieve', 'niebla', 'tormenta', 'ola de calor', 'ola de frío', 'helada'];
+        for (const fen of fenomenosComunes) {
+          if (tLower.includes(fen)) {
+            fenomeno = fen.charAt(0).toUpperCase() + fen.slice(1);
+            break;
+          }
+        }
+      }
 
+      console.log(`   🌧️  Fenómeno: ${fenomeno}`);
+
+      // 4. Actualizar alerta si es de mayor prioridad
       if (codigoProv) {
         const prioridad = { rojo: 4, naranja: 3, amarillo: 2, verde: 1 };
         const nivelActual = alertasPorProvincia[codigoProv].nivel;
@@ -315,9 +435,17 @@ async function descargarAlertasAEMET() {
             fenomeno: fenomeno.charAt(0).toUpperCase() + fenomeno.slice(1),
             timestamp: new Date().toISOString()
           };
+          console.log(`   ✅ Alerta actualizada para provincia ${codigoProv}`);
+        } else {
+          console.log(`   ⏭️  Alerta ignorada (nivel ${nivel} no supera ${nivelActual})`);
         }
       }
     });
+    
+    console.log(`\n📊 Resumen del procesado:`);
+    console.log(`   - Entradas procesadas: ${procesadas}`);
+    console.log(`   - Alertas detectadas: ${detectadas}`);
+    console.log(`   - Sin provincia identificada: ${sinProvincia}`);
     
     // Feedback por consola
     let conAlertas = 0;
@@ -330,7 +458,13 @@ async function descargarAlertasAEMET() {
       }
     });
     
-    if (conAlertas === 0) console.log("⚠️ No se han detectado alertas activas en el procesado.");
+    if (conAlertas === 0) {
+      console.log("⚠️ No se han detectado alertas activas en el procesado.");
+      console.log("💡 Posibles causas:");
+      console.log("   - No hay alertas activas en AEMET");
+      console.log("   - El formato del XML ha cambiado");
+      console.log("   - Las provincias no se están identificando correctamente");
+    }
 
     guardarAlertasEnArchivo(alertasPorProvincia);
     actualizarEstadoSincronizacion(true, `Sincronizado: ${conAlertas} alertas.`);
@@ -338,6 +472,7 @@ async function descargarAlertasAEMET() {
     
   } catch (error) {
     console.error(`❌ Error: ${error.message}`);
+    console.error(`📋 Stack:`, error.stack);
     actualizarEstadoSincronizacion(false, `Error: ${error.message}`);
     throw error;
   }
