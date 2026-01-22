@@ -93,6 +93,40 @@ async function actualizarEstadoSincronizacion() {
     }
 }
 
+// Actualizar estadísticas en la leyenda
+async function actualizarEstadisticas() {
+    try {
+        const response = await fetch('/api/sincronizacion/estado');
+        const estado = await response.json();
+        
+        const estadisticasDiv = document.getElementById('estadisticas');
+        
+        if (estado.estadisticas) {
+            const stats = estado.estadisticas;
+            estadisticasDiv.innerHTML = `
+                <p style="margin-bottom: 10px;"><strong>Última descarga:</strong></p>
+                <div style="font-size: 12px; margin-bottom: 5px;">
+                    📦 <strong>${stats.total}</strong> archivos CAP procesados
+                </div>
+                <div style="font-size: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                    <div>🔴 Rojas: <strong>${stats.rojo}</strong></div>
+                    <div>🟠 Naranjas: <strong>${stats.naranja}</strong></div>
+                    <div>🟡 Amarillas: <strong>${stats.amarillo}</strong></div>
+                    <div>🟢 Verdes: <strong>${stats.verde}</strong></div>
+                </div>
+            `;
+        } else {
+            estadisticasDiv.innerHTML = `
+                <p style="margin-bottom: 5px; font-size: 12px;">
+                    <strong>Esperando primera descarga...</strong>
+                </p>
+            `;
+        }
+    } catch (error) {
+        console.error('Error actualizando estadísticas:', error);
+    }
+}
+
 // Función para renderizar tabla de alertas activas
 function renderizarTablaAlertas(sedes) {
     const tablaContainer = document.getElementById('tablaAlertas');
@@ -205,6 +239,7 @@ async function cargarSedes() {
         
         renderizarTablaAlertas(sedes);
         await actualizarEstadoSincronizacion();
+        await actualizarEstadisticas();
         
         console.log(`✅ ${sedes.length} sedes cargadas correctamente`);
     } catch (error) {
@@ -227,12 +262,11 @@ async function forzarActualizacion() {
     
     try {
         btnActualizar.disabled = true;
-        btnActualizar.textContent = '📥 Descargando datos AEMET...';
+        btnActualizar.textContent = '📥 Descargando paquete AEMET...';
         
-        // Actualizar mensaje de sincronización
         syncIcon.textContent = '📥';
         syncIcon.className = 'sync-icon';
-        syncMessage.textContent = 'Descargando datos de AEMET...';
+        syncMessage.textContent = 'Descargando y procesando archivos CAP...';
         syncMessage.className = 'sync-message';
         
         const response = await fetch('/api/sincronizacion/forzar', {
@@ -244,12 +278,10 @@ async function forzarActualizacion() {
         if (resultado.success) {
             console.log('✅ Actualización forzada correctamente');
             
-            btnActualizar.textContent = '⏳ Procesando...';
+            btnActualizar.textContent = '⏳ Procesando datos...';
             
-            // Esperar a que se guarden los datos
             await new Promise(resolve => setTimeout(resolve, 3000));
             
-            // Recargar sedes
             await cargarSedes();
             
             btnActualizar.textContent = '✅ Actualizado';
@@ -276,10 +308,19 @@ async function forzarActualizacion() {
     }
 }
 
+// Cargar sedes al iniciar
 cargarSedes();
+
+// Actualizar cada 5 minutos (300000 ms)
 setInterval(cargarSedes, 300000);
+
+// Actualizar estado de sincronización cada 30 segundos
 setInterval(actualizarEstadoSincronizacion, 30000);
 
+// Actualizar estadísticas cada 30 segundos
+setInterval(actualizarEstadisticas, 30000);
+
+// Funcionalidad del botón de centrar España
 document.getElementById('btnResetMap').addEventListener('click', () => {
     map.flyTo(VISTAS.espana.centro, VISTAS.espana.zoom, {
         duration: 1.5,
@@ -287,6 +328,7 @@ document.getElementById('btnResetMap').addEventListener('click', () => {
     });
 });
 
+// Funcionalidad del botón de Canarias
 document.getElementById('btnCanarias').addEventListener('click', () => {
     map.flyTo(VISTAS.canarias.centro, VISTAS.canarias.zoom, {
         duration: 1.5,
@@ -294,4 +336,5 @@ document.getElementById('btnCanarias').addEventListener('click', () => {
     });
 });
 
+// Funcionalidad del botón de actualizar
 document.getElementById('btnActualizar').addEventListener('click', forzarActualizacion);
