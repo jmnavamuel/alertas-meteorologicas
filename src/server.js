@@ -56,12 +56,20 @@ function leerSedes() {
     fs.createReadStream(csvPath)
       .pipe(csv())
       .on('data', (row) => {
+        const lat = parseFloat(row.latitud);
+        const lon = parseFloat(row.longitud);
+
+        if (Number.isNaN(lat) || Number.isNaN(lon)) {
+          console.warn('⚠️  Omitiendo sede con coordenadas inválidas:', row.nombre, row.latitud, row.longitud);
+          return;
+        }
+
         sedes.push({
           nombre: row.nombre,
           calle: row.calle,
           codigoPostal: row.codigo_postal,
-          latitud: parseFloat(row.latitud),
-          longitud: parseFloat(row.longitud),
+          latitud: lat,
+          longitud: lon,
           provincia: row.provincia || null
         });
       })

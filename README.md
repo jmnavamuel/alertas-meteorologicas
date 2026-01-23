@@ -344,6 +344,11 @@ Mi Nueva Sede,Calle Nueva 1,28001,40.4168,-3.7038,28
 sudo docker-compose restart
 ```
 
+Nota importante sobre el CSV:
+- El archivo `data/sedes.csv` debe incluir coordenadas válidas en las columnas `latitud` y `longitud`.
+- Si una fila contiene valores no numéricos o inválidos en latitud/longitud, **esa sede será omitida al cargar los datos** (se registrará una advertencia en los logs del servidor).
+- El campo `provincia` es opcional —si no se proporciona, el servicio intentará inferirla a partir del código postal.
+
 ### Actualizar el sistema:
 ```bash
 cd /volume1/docker/alertas-meteorologicas
