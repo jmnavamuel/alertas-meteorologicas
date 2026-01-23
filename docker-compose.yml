@@ -38,7 +38,7 @@ services:
     env_file:
       - .env
     restart: unless-stopped
-    command: ["/bin/sh","-c","pip install -r /app/src/downloader/requirements.txt >/dev/null 2>&1 || true; while true; do python /app/src/downloader/alert_downloader.py || true; sleep 3600; done"]
+    command: ["/bin/sh","-c","pip install -r /app/src/downloader/requirements.txt && while true; do python /app/src/downloader/alert_downloader.py; if [ $? -ne 0 ]; then echo '❌ Error en descarga'; fi; sleep 3600; done"]
     networks:
       - alertas-network
 

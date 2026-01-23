@@ -166,8 +166,10 @@ function renderizarTablaAlertas(sedes) {
                     <tr>
                         <th>Nivel</th>
                         <th>Sede</th>
+                        <th>Tipo</th>
                         <th>Dirección</th>
-                        <th>C.P.</th>
+                        <th>Responsable</th>
+                        <th>Teléfono</th>
                         <th>Tipo de Incidente</th>
                         <th>Actualización</th>
                     </tr>
@@ -189,8 +191,10 @@ function renderizarTablaAlertas(sedes) {
                     </span>
                 </td>
                 <td><strong>${sede.nombre}</strong></td>
+                <td>${sede.tipologia}</td>
                 <td>${sede.calle}</td>
-                <td>${sede.codigoPostal}</td>
+                <td>${sede.responsable.nombre}</td>
+                <td>${sede.responsable.telefono}</td>
                 <td>${fenomeno}</td>
                 <td><small>${actualizacion}</small></td>
             </tr>
@@ -234,8 +238,15 @@ async function cargarSedes() {
             
             const popupContent = `
                 <div class="popup-title">${sede.nombre}</div>
+                <div class="popup-info">🏢 Tipo: ${sede.tipologia}</div>
                 <div class="popup-info">📍 ${sede.calle}</div>
                 <div class="popup-info">📮 CP: ${sede.codigoPostal}</div>
+                <hr style="border: none; border-top: 1px solid #ddd; margin: 8px 0;">
+                <div class="popup-info"><strong>Responsable:</strong></div>
+                <div class="popup-info">👤 ${sede.responsable.nombre}</div>
+                <div class="popup-info">📞 ${sede.responsable.telefono}</div>
+                <div class="popup-info">📧 ${sede.responsable.email}</div>
+                <hr style="border: none; border-top: 1px solid #ddd; margin: 8px 0;">
                 <div class="popup-alerta" style="background-color: ${sede.alerta.color}20; color: ${sede.alerta.color};">
                     ⚠️ Nivel: ${sede.alerta.nombre}
                     ${sede.alerta.fenomeno ? `<br>🌧️ ${sede.alerta.fenomeno}` : ''}

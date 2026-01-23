@@ -1,13 +1,13 @@
-nombre,calle,codigo_postal,latitud,longitud
-Sede Madrid Centro,Calle Gran Vía 28,28013,40.4200,-3.7038
-Sede Barcelona Diagonal,Avinguda Diagonal 525,08029,41.3980,2.1450
-Sede Valencia Puerto,Carrer del Mestre Palau 3,46021,39.4565,-0.3315
-Sede Sevilla Triana,Calle Betis 51,41010,37.3850,-5.9965
-Sede Bilbao Centro,Gran Vía Don Diego López de Haro 85,48011,43.2627,-2.9253
-Sede Zaragoza Plaza,Plaza del Pilar 18,50003,41.6561,-0.8773
-Sede Málaga Puerto,Paseo del Muelle Uno 5,29016,36.7167,-4.4189
-Sede Alicante Playa,Explanada de España 2,03002,38.3460,-0.4814
-Sede Santander Sardinero,Paseo Pérez Galdós 28,39005,43.4722,-3.7878
-Sede Toledo Casco,Calle Comercio 7,45001,39.8628,-4.0273
-Sede Tenerife Sur,Avenida de las Américas 5,38660,28.0468,-16.7725
-Sede Las Palmas Puerto,Calle Albareda 54,35008,28.1235,-15.4363
+nombre,tipologia,calle,codigo_postal,latitud,longitud,provincia,responsable_nombre,responsable_telefono,responsable_email
+Sede Madrid Centro,SSCC,Calle Gran Vía 28,28013,40.4200,-3.7038,Madrid,Dr. Carlos García Martínez,+34 91 234 5678,carlos.garcia@ejemplo.com
+Sede Barcelona Diagonal,Delegación,Avinguda Diagonal 525,08029,41.3980,2.1450,Barcelona,Dra. María López González,+34 93 456 7890,maria.lopez@ejemplo.com
+Sede Valencia Puerto,Centro Médico,Carrer del Mestre Palau 3,46021,39.4565,-0.3315,Valencia,Dr. Juan Rodríguez Pérez,+34 96 123 4567,juan.rodriguez@ejemplo.com
+Sede Sevilla Triana,Clínica Dental,Calle Betis 51,41010,37.3850,-5.9965,Sevilla,Dra. Isabel Fernández Sánchez,+34 95 789 0123,isabel.fernandez@ejemplo.com
+Sede Bilbao Centro,SSCC,Gran Vía Don Diego López de Haro 85,48011,43.2627,-2.9253,Vizcaya,Dr. Antonio García López,+34 94 234 5678,antonio.garcia@ejemplo.com
+Sede Zaragoza Plaza,Centro Médico,Plaza del Pilar 18,50003,41.6561,-0.8773,Zaragoza,Dra. Sofía Hernández Ruiz,+34 97 612 3456,sofia.hernandez@ejemplo.com
+Sede Málaga Puerto,Delegación,Paseo del Muelle Uno 5,29016,36.7167,-4.4189,Málaga,Dr. Miguel Sánchez Torres,+34 95 345 6789,miguel.sanchez@ejemplo.com
+Sede Alicante Playa,Clínica Dental,Explanada de España 2,03002,38.3460,-0.4814,Alicante,Dra. Patricia Díaz Álvarez,+34 96 567 8901,patricia.diaz@ejemplo.com
+Sede Santander Sardinero,SSCC,Paseo Pérez Galdós 28,39005,43.4722,-3.7878,Cantabria,Dr. Francisco Álvarez Navarro,+34 94 567 8901,francisco.alvarez@ejemplo.com
+Sede Toledo Casco,Centro Médico,Calle Comercio 7,45001,39.8628,-4.0273,Toledo,Dra. Elena Rodríguez Martín,+34 92 589 0123,elena.rodriguez@ejemplo.com
+Sede Tenerife Sur,Delegación,Avenida de las Américas 5,38660,28.0468,-16.7725,Santa Cruz de Tenerife,Dr. Javier López Ramírez,+34 92 234 5678,javier.lopez@ejemplo.com
+Sede Las Palmas Puerto,Clínica Dental,Calle Albareda 54,35008,28.1235,-15.4363,Las Palmas,Dra. Beatriz García Moreno,+34 92 456 7890,beatriz.garcia@ejemplo.com

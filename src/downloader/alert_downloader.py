@@ -111,25 +111,18 @@ def fetch_json():
     try:
         clean_debug_and_tmp()
 
-    # Si ya hay un JSON reciente en data/alertas (última hora), reutilizarlo
-    latest = latest_json_file()
-    if latest:
-        age = time.time() - latest.stat().st_mtime
-        if age < 3600:
-            print(f"⏱️  JSON reciente encontrado ({latest.name}), no se descargará uno nuevo")
-            json_path = latest
-        else:
-            json_path = None
-    else:
+        # Si ya hay una descarga reciente (JSON O tar.gz dentro de la última hora), omitir
+        if recent_download_exists(max_age_seconds=3600):
+            print('⏱️  Descarga reciente encontrada, omitiendo sincronización')
+            return 0
+
+        endpoints = [
+            f"{AEMET_BASE}/avisos_cap/activos/area/esp?api_key={AEMET_API_KEY}",
+            f"{AEMET_BASE}/avisos_cap/ultimoelaborado/area/esp?api_key={AEMET_API_KEY}"
+        ]
+
+        # Intentar descargar nuevo JSON
         json_path = None
-
-    endpoints = [
-        f"{AEMET_BASE}/avisos_cap/activos/area/esp?api_key={AEMET_API_KEY}",
-        f"{AEMET_BASE}/avisos_cap/ultimoelaborado/area/esp?api_key={AEMET_API_KEY}"
-    ]
-
-    # Si no tenemos un JSON reciente, intentar descargar uno nuevo
-    if not json_path:
         for idx, url in enumerate(endpoints, start=1):
             try:
                 print(f"📡 Descargando JSON AEMET (opción {idx}): {url.replace(AEMET_API_KEY, mask_key(AEMET_API_KEY))}")
@@ -163,31 +156,31 @@ def fetch_json():
             except requests.RequestException as e:
                 print(f'❌ Error petición: {e}')
 
-    if not json_path:
-        print('❌ No se pudo obtener el JSON de AEMET (todas las opciones fallaron)')
-        return 2
+        if not json_path:
+            print('❌ No se pudo obtener el JSON de AEMET (todas las opciones fallaron)')
+            return 2
 
-    # Intentar descargar el tar.gz indicado en el campo 'datos' del JSON seleccionado
-    try:
-        with open(json_path, 'r', encoding='utf-8') as jf:
-            data = json.load(jf)
+        # Intentar descargar el tar.gz indicado en el campo 'datos' del JSON seleccionado
+        try:
+            with open(json_path, 'r', encoding='utf-8') as jf:
+                data = json.load(jf)
 
-        datos_url = data.get('datos')
-        if isinstance(datos_url, list):
-            datos_url = datos_url[0] if datos_url else None
+            datos_url = data.get('datos')
+            if isinstance(datos_url, list):
+                datos_url = datos_url[0] if datos_url else None
 
-        if datos_url:
-            print(f"📥 Descargando paquete de alertas: {datos_url}")
-            ok = download_tar(datos_url, json_path.stem)
-            if not ok:
-                print('❌ Falló la descarga/extracción del paquete de alertas')
-                return 3
-        else:
-            print('⚠️  El campo "datos" no contiene URL válida')
-            return 4
-    except Exception as e:
-        print('❌ Error leyendo JSON local:', e)
-        return 5
+            if datos_url:
+                print(f"📥 Descargando paquete de alertas: {datos_url}")
+                ok = download_tar(datos_url, json_path.stem)
+                if not ok:
+                    print('❌ Falló la descarga/extracción del paquete de alertas')
+                    return 3
+            else:
+                print('⚠️  El campo "datos" no contiene URL válida')
+                return 4
+        except Exception as e:
+            print('❌ Error leyendo JSON local:', e)
+            return 5
 
     finally:
         release_lock()
@@ -550,6 +543,7 @@ def parse_tmp_and_write_csv(tmp_dir: Path):
 def parse_tmp_and_write_raw_csv(tmp_dir: Path):
     """Genera un CSV con todas las alertas (amarillo/naranja/rojo) sin agrupar.
     Columnas: codigo_provincia, nombre_provincia, subprovincia, nivel, fenomeno, timestamp, source_file, excerpt
+    También genera alertas-latest.csv con formato simplificado para la API Node.js
     """
     files = []
     for root, _, filenames in os.walk(tmp_dir):
@@ -562,6 +556,9 @@ def parse_tmp_and_write_raw_csv(tmp_dir: Path):
         return
 
     rows = []
+    # Agrupar alertas por provincia para el CSV simplificado
+    alertas_por_provincia = {}
+    
     for fpath in files:
         try:
             with open(fpath, 'rb') as fh:
@@ -600,6 +597,22 @@ def parse_tmp_and_write_raw_csv(tmp_dir: Path):
                 start = extract_start_date(entry) or ts
                 excerpt = ' '.join(entry.split())[:300]
                 rows.append([prov, PROVINCIAS.get(prov, ''), subprov, nivel, fenomeno, start, ts, os.path.basename(fpath), excerpt])
+                
+                # Guardar el nivel más alto por provincia
+                if prov and prov not in alertas_por_provincia:
+                    alertas_por_provincia[prov] = {
+                        'nombre': PROVINCIAS.get(prov, ''),
+                        'nivel': nivel,
+                        'fenomeno': fenomeno,
+                        'timestamp': ts
+                    }
+                elif prov:
+                    # Actualizar si el nuevo nivel es más alto
+                    niveles_orden = {'amarillo': 1, 'naranja': 2, 'rojo': 3}
+                    if niveles_orden.get(nivel, 0) > niveles_orden.get(alertas_por_provincia[prov]['nivel'], 0):
+                        alertas_por_provincia[prov]['nivel'] = nivel
+                        alertas_por_provincia[prov]['fenomeno'] = fenomeno
+                        alertas_por_provincia[prov]['timestamp'] = ts
         except Exception as e:
             print('⚠️  Error procesando (raw)', fpath, e)
 
@@ -623,6 +636,20 @@ def parse_tmp_and_write_raw_csv(tmp_dir: Path):
         for r in rows:
             writer.writerow(r)
 
+    # Escribir CSV simplificado para la API Node.js
+    latest_file = out_dir / 'alertas-latest.csv'
+    with open(latest_file, 'w', encoding='utf-8', newline='') as csvf:
+        writer = csv.writer(csvf)
+        writer.writerow(['codigo_provincia', 'nombre_provincia', 'nivel', 'fenomeno', 'timestamp'])
+        for codigo, datos in alertas_por_provincia.items():
+            writer.writerow([
+                codigo,
+                datos['nombre'],
+                datos['nivel'],
+                datos.get('fenomeno') or 'null',
+                datos['timestamp']
+            ])
+
     # eliminar otros alertas-*.csv en la carpeta `data/`, dejando solo el último
     try:
         for f in out_dir.glob('alertas-*.csv'):
@@ -635,6 +662,7 @@ def parse_tmp_and_write_raw_csv(tmp_dir: Path):
         pass
 
     print(f"✅ CSV de alertas (no verdes) guardado en: {out_file}")
+    print(f"✅ CSV simplificado generado en: {latest_file}")
 
 
 def clean_debug_and_tmp():

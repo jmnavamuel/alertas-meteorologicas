@@ -4,18 +4,10 @@ const fs = require('fs');
 const csv = require('csv-parser');
 const path = require('path');
 const cors = require('cors');
-const { obtenerAlertasAEMET, getEstadoSincronizacion, forzarActualizacion } = require('./aemet-service');
 
 const app = express();
 const PORT = process.env.PORT || 3100;
-
-// Verificar que existe la API Key
-if (!process.env.AEMET_API_KEY || process.env.AEMET_API_KEY === 'your_api_key_here' || process.env.AEMET_API_KEY === 'TU_API_KEY_REAL_AQUI') {
-  console.error('❌ ERROR: No se ha configurado la API Key de AEMET');
-  console.error('Por favor, edita el archivo .env con tu AEMET_API_KEY');
-  console.error('Ejemplo: AEMET_API_KEY=tu_clave_aqui');
-  process.exit(1);
-}
+const DATA_DIR = path.join(__dirname, '../data');
 
 app.use(cors());
 app.use(express.json());
@@ -38,6 +30,42 @@ app.get('/', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
+
+// Leer alertas del CSV generado por el script Python
+function leerAlertasDesdeCSV() {
+  return new Promise((resolve) => {
+    const alertas = {};
+    const csvPath = path.join(DATA_DIR, 'alertas-latest.csv');
+    
+    // Si no existe archivo, devolver objeto vacío (sin alertas)
+    if (!fs.existsSync(csvPath)) {
+      console.log('⚠️  CSV de alertas no encontrado aún:', csvPath);
+      resolve(alertas);
+      return;
+    }
+    
+    fs.createReadStream(csvPath)
+      .pipe(csv())
+      .on('data', (row) => {
+        const codigo = row.codigo_provincia?.trim();
+        if (codigo) {
+          alertas[codigo] = {
+            nombre: row.nombre_provincia || 'Desconocida',
+            nivel: row.nivel || 'verde',
+            fenomeno: row.fenomeno !== 'null' ? row.fenomeno : null,
+            timestamp: row.timestamp || new Date().toISOString()
+          };
+        }
+      })
+      .on('end', () => {
+        resolve(alertas);
+      })
+      .on('error', () => {
+        // En caso de error, devolver objeto vacío
+        resolve(alertas);
+      });
+  });
+}
 
 // Leer sedes del CSV
 function leerSedes() {
@@ -66,11 +94,17 @@ function leerSedes() {
 
         sedes.push({
           nombre: row.nombre,
+          tipologia: row.tipologia || 'SSCC',
           calle: row.calle,
           codigoPostal: row.codigo_postal,
           latitud: lat,
           longitud: lon,
-          provincia: row.provincia || null
+          provincia: row.provincia || null,
+          responsable: {
+            nombre: row.responsable_nombre || 'No especificado',
+            telefono: row.responsable_telefono || 'No disponible',
+            email: row.responsable_email || 'No disponible'
+          }
         });
       })
       .on('end', () => {
@@ -84,21 +118,27 @@ function leerSedes() {
   });
 }
 
-// Endpoint para obtener sedes con alertas reales de AEMET
+// Endpoint para obtener sedes con alertas desde el CSV de Python
 app.get('/api/sedes', async (req, res) => {
   try {
     const sedes = await leerSedes();
+    const alertas = await leerAlertasDesdeCSV();
     
-    // Obtener alertas reales de AEMET para cada sede
-    const sedesConAlertas = await Promise.all(
-      sedes.map(async (sede) => {
-        const alerta = await obtenerAlertasAEMET(sede.provincia, sede.codigoPostal);
-        return {
-          ...sede,
-          alerta
-        };
-      })
-    );
+    // Asociar alertas a cada sede según su código de provincia
+    const sedesConAlertas = sedes.map((sede) => {
+      const codigoProvinicia = sede.codigoPostal?.substring(0, 2);
+      const alerta = alertas[codigoProvinicia] || { 
+        nombre: sede.provincia,
+        nivel: 'verde', 
+        fenomeno: null, 
+        timestamp: new Date().toISOString() 
+      };
+      
+      return {
+        ...sede,
+        alerta
+      };
+    });
     
     res.json(sedesConAlertas);
   } catch (error) {
@@ -110,51 +150,26 @@ app.get('/api/sedes', async (req, res) => {
   }
 });
 
-// Endpoint para obtener estado de sincronización
-app.get('/api/sincronizacion/estado', (req, res) => {
-  const estado = getEstadoSincronizacion();
-  res.json(estado);
-});
-
-// Endpoint para forzar actualización
-app.post('/api/sincronizacion/forzar', async (req, res) => {
-  try {
-    console.log('🔄 Forzando actualización manual de datos AEMET...');
-    await forzarActualizacion();
-    const estado = getEstadoSincronizacion();
-    res.json({ 
-      success: true, 
-      mensaje: 'Actualización completada',
-      estado 
-    });
-  } catch (error) {
-    console.error('❌ Error forzando actualización:', error);
-    res.status(500).json({ 
-      success: false,
-      error: 'Error al forzar actualización',
-      message: error.message 
-    });
-  }
-});
-
 // Endpoint de health check
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
-    timestamp: new Date().toISOString(),
-    apiKeyConfigured: !!process.env.AEMET_API_KEY
+    timestamp: new Date().toISOString()
   });
 });
 
-// Endpoint para verificar configuración
-app.get('/api/config/status', (req, res) => {
-  res.json({
-    apiKeyConfigured: !!process.env.AEMET_API_KEY && 
-                      process.env.AEMET_API_KEY !== 'your_api_key_here' && 
-                      process.env.AEMET_API_KEY !== 'TU_API_KEY_REAL_AQUI',
-    nodeEnv: process.env.NODE_ENV,
-    port: PORT
-  });
+// Endpoint para obtener alertas (datos procesados por el script Python)
+app.get('/api/alertas', async (req, res) => {
+  try {
+    const alertas = await leerAlertasDesdeCSV();
+    res.json(alertas);
+  } catch (error) {
+    console.error('❌ Error en /api/alertas:', error);
+    res.status(500).json({ 
+      error: 'Error al cargar las alertas',
+      message: error.message 
+    });
+  }
 });
 
 // Manejo de errores global
@@ -172,8 +187,9 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('║   🌦️  SISTEMA DE ALERTAS METEOROLÓGICAS AEMET  🌦️   ║');
   console.log('╚════════════════════════════════════════════════════════╝');
   console.log(`✅ Servidor iniciado en http://0.0.0.0:${PORT}`);
-  console.log(`📁 Directorio de trabajo: ${__dirname}`);
-  console.log(`🔑 API Key AEMET: ${process.env.AEMET_API_KEY && process.env.AEMET_API_KEY !== 'your_api_key_here' && process.env.AEMET_API_KEY !== 'TU_API_KEY_REAL_AQUI' ? '✅ Configurada' : '❌ NO configurada'}`);
+  console.log(`📁 Directorio de datos: ${DATA_DIR}`);
+  console.log(`🐍 Las alertas son procesadas por el script Python`);
+  console.log(`📊 Lecturas desde: data/alertas-latest.csv`);
   console.log(`🌍 Entorno: ${process.env.NODE_ENV || 'development'}`);
   console.log('═══════════════════════════════════════════════════════');
 });
