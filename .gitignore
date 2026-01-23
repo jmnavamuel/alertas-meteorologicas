@@ -9,6 +9,11 @@ package-lock.json
 # Archivos de alertas descargados
 data/alertas-*.csv
 
+# Sólo incluir en el repositorio `data/sedes.csv`. Ignorar el resto de `data/`.
+# Para forzar el seguimiento de `data/sedes.csv`, se niega la regla de ignore anterior.
+/data/*
+!/data/sedes.csv
+
 # Logs
 *.log
 logs/

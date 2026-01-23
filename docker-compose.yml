@@ -28,6 +28,20 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  aemet-downloader:
+    image: python:3.11-slim
+    container_name: alertas-downloader
+    volumes:
+      - ./src:/app/src:ro
+      - ./data/alertas:/app/data/alertas:rw
+      - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - .env
+    restart: unless-stopped
+    command: ["/bin/sh","-c","pip install -r /app/src/downloader/requirements.txt >/dev/null 2>&1 || true; while true; do python /app/src/downloader/alert_downloader.py || true; sleep 3600; done"]
+    networks:
+      - alertas-network
+
 networks:
   alertas-network:
     driver: bridge
