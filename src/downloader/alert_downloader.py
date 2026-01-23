@@ -27,6 +27,42 @@ DATA_DIR = Path(os.getenv('ALERTAS_DIR') or str(DEFAULT_ALERTAS))
 # Para habilitarlos exporta `ALERTAS_DEBUG=1` en el entorno del contenedor.
 WRITE_DEBUG = os.getenv('ALERTAS_DEBUG', '0') in ('1', 'true', 'True')
 
+# Lock file to avoid concurrent runs (helps si el contenedor se lanza varias veces)
+LOCK_FILE = DATA_DIR / '.fetch_lock'
+LOCK_STALE_SECONDS = 1800  # considerar stale si tiene más de 30min
+
+def acquire_lock():
+    """Try to create a lock file atomically. Returns True if lock acquired, False otherwise."""
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        # Use os.open with O_EXCL to ensure atomic creation
+        fd = os.open(str(LOCK_FILE), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        try:
+            os.write(fd, f"pid:{os.getpid()}\n".encode('utf-8'))
+        finally:
+            os.close(fd)
+        return True
+    except FileExistsError:
+        try:
+            mtime = LOCK_FILE.stat().st_mtime
+            if time.time() - mtime > LOCK_STALE_SECONDS:
+                try:
+                    LOCK_FILE.unlink()
+                except Exception:
+                    return False
+                # retry once
+                return acquire_lock()
+        except Exception:
+            pass
+        return False
+
+def release_lock():
+    try:
+        if LOCK_FILE.exists():
+            LOCK_FILE.unlink()
+    except Exception:
+        pass
+
 
 def ensure_data_dir():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -67,7 +103,13 @@ def fetch_json():
 
     # Asegurar carpeta y limpieza de debug/tmp antes de arrancar
     ensure_data_dir()
-    clean_debug_and_tmp()
+    # evitar ejecuciones concurrentes
+    locked = acquire_lock()
+    if not locked:
+        print('⏳ Otra instancia en ejecución. Se omite esta ejecución.')
+        return 0
+    try:
+        clean_debug_and_tmp()
 
     # Si ya hay un JSON reciente en data/alertas (última hora), reutilizarlo
     latest = latest_json_file()
@@ -147,6 +189,8 @@ def fetch_json():
         print('❌ Error leyendo JSON local:', e)
         return 5
 
+    finally:
+        release_lock()
     return 0
 
 
