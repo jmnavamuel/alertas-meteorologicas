@@ -318,60 +318,6 @@ async function cargarSedes() {
     }
 }
 
-// Forzar actualización de datos
-async function forzarActualizacion() {
-    const btnActualizar = document.getElementById('btnActualizar');
-    const syncMessage = document.getElementById('syncMessage');
-    const syncIcon = document.getElementById('syncIcon');
-    
-    try {
-        btnActualizar.disabled = true;
-        btnActualizar.textContent = '📥 Descargando paquete AEMET...';
-        
-        syncIcon.textContent = '📥';
-        syncIcon.className = 'sync-icon';
-        syncMessage.textContent = 'Descargando y procesando archivos CAP...';
-        syncMessage.className = 'sync-message';
-        
-        const response = await fetch('/api/sincronizacion/forzar', {
-            method: 'POST'
-        });
-        
-        const resultado = await response.json();
-        
-        if (resultado.success) {
-            console.log('✅ Actualización forzada correctamente');
-            
-            btnActualizar.textContent = '⏳ Procesando datos...';
-            
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            
-            await cargarSedes();
-            
-            btnActualizar.textContent = '✅ Actualizado';
-            setTimeout(() => {
-                btnActualizar.textContent = '🔄 Actualizar Datos AEMET';
-            }, 3000);
-        } else {
-            throw new Error(resultado.message || 'Error desconocido');
-        }
-    } catch (error) {
-        console.error('Error forzando actualización:', error);
-        btnActualizar.textContent = '❌ Error al actualizar';
-        
-        syncIcon.textContent = '❌';
-        syncIcon.className = 'sync-icon error';
-        syncMessage.textContent = 'Error en la descarga';
-        syncMessage.className = 'sync-message error';
-        
-        setTimeout(() => {
-            btnActualizar.textContent = '🔄 Actualizar Datos AEMET';
-        }, 3000);
-    } finally {
-        btnActualizar.disabled = false;
-    }
-}
-
 // Cargar sedes al iniciar
 cargarSedes();
 
@@ -396,9 +342,6 @@ document.getElementById('btnCanarias').addEventListener('click', () => {
         easeLinearity: 0.25
     });
 });
-
-// Funcionalidad del botón de actualizar
-document.getElementById('btnActualizar').addEventListener('click', forzarActualizacion);
 
 // Inicializar controles de filtro (tipologías y fenómenos)
 function initFilterControls() {

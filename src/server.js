@@ -205,19 +205,32 @@ app.get('/api/sincronizacion/estado', (req, res) => {
   }
 });
 
-// Forzar una sincronización: ejecutar el script Python del downloader
-app.post('/api/sincronizacion/forzar', (req, res) => {
+// Programar sincronización cada hora (ejecución automática)
+// Ejecuta el script Python del downloader al iniciar y luego cada hora
+function runDownloaderAndLog() {
   const cmd = 'python3 src/downloader/alert_downloader.py';
   exec(cmd, { cwd: path.join(__dirname, '..'), timeout: 5 * 60 * 1000 }, (error, stdout, stderr) => {
     if (error) {
-      console.error('❌ Error ejecutando downloader:', error.message);
-      console.error(stderr);
-      return res.json({ success: false, message: stderr || error.message });
+      console.error('❌ Error ejecutando downloader programado:', error.message);
+      if (stderr) console.error(stderr);
+      return;
     }
-    console.log('✅ Downloader ejecutado manualmente');
-    return res.json({ success: true, message: 'Descarga iniciada', output: stdout });
+    console.log('✅ Downloader programado ejecutado correctamente');
+    if (stdout) console.log(stdout);
   });
-});
+}
+function scheduleHourlySync() {
+  // Ejecutar inmediatamente al arrancar y luego cada hora
+  try {
+    runDownloaderAndLog();
+    setInterval(runDownloaderAndLog, 60 * 60 * 1000);
+    console.log('⏱️  Sincronización programada cada 1 hora');
+  } catch (e) {
+    console.error('❌ Error al programar sincronización:', e.message);
+  }
+}
+// Iniciar el scheduler
+scheduleHourlySync();
 
 // Endpoint para obtener alertas (datos procesados por el script Python)
 app.get('/api/alertas', async (req, res) => {
