@@ -25,6 +25,7 @@ let todasLasSedes = [];
 // Estado de filtros
 let selectedTipologias = new Set();
 let selectedFenomenos = new Set();
+let rangoAlertas = 'actual'; // 'actual', '24h', '48h'
 
 // Filtro solo para el mapa: aplica solo tipología
 function sedeVisibleEnMapa(sede) {
@@ -32,13 +33,45 @@ function sedeVisibleEnMapa(sede) {
     if (selectedTipologias.size > 0 && !selectedTipologias.has((sede.tipologia || '').toLowerCase())) {
         return false;
     }
+    // filtro temporal
+    if (!alertaEnRango(sede.alerta)) {
+        return false;
+    }
     return true;
+}
+
+// Verificar si una alerta está en el rango temporal seleccionado
+function alertaEnRango(alerta) {
+    if (!alerta) return false;
+    const now = new Date();
+    const alertaStart = new Date(alerta.start || alerta.timestamp);
+    const alertaEnd = new Date(alerta.end || alerta.timestamp);
+    
+    switch (rangoAlertas) {
+        case 'actual':
+            // alertas que ya han comenzado
+            return alertaStart <= now;
+        case '24h':
+            // alertas que comenzarán en las próximas 24 horas
+            const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+            return alertaStart <= in24h;
+        case '48h':
+            // alertas que comenzarán en las próximas 48 horas
+            const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+            return alertaStart <= in48h;
+        default:
+            return true;
+    }
 }
 
 // Filtro para la tabla: aplica tipología y fenómeno
 function sedeVisibleEnTabla(sede) {
     // tipologia
     if (selectedTipologias.size > 0 && !selectedTipologias.has((sede.tipologia || '').toLowerCase())) {
+        return false;
+    }
+    // filtro temporal
+    if (!alertaEnRango(sede.alerta)) {
         return false;
     }
     // filtrar por fenomenos seleccionados (solo en tabla)
@@ -358,6 +391,14 @@ async function cargarSedes() {
 
 // Cargar sedes al iniciar
 cargarSedes();
+
+// Agregar listeners para los filtros de rango temporal
+document.querySelectorAll('input[name="rangoAlertas"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+        rangoAlertas = e.target.value;
+        cargarSedes();
+    });
+});
 
 // Actualizar estado de sincronización cada 30 segundos (para mostrar cuándo se actualizaron datos)
 setInterval(actualizarEstadoSincronizacion, 30000);

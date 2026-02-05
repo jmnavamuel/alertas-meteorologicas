@@ -410,6 +410,27 @@ def extract_start_date(text: str):
     return None
 
 
+def extract_end_date(text: str):
+    """Intentar extraer la fecha/hora de fin del evento desde el texto.
+    Busca el SEGUNDO datetime ISO8601 encontrado (asumiendo start es el primero).
+    """
+    if not text:
+        return None
+    # buscar todos los patrones ISO8601
+    matches = re.finditer(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:?\d{2})?", text)
+    dt_list = list(matches)
+    if len(dt_list) >= 2:
+        # devolver el segundo
+        dt = dt_list[1].group(0)
+        if dt.endswith('Z'):
+            dt = dt.replace('Z', '+00:00')
+        m2 = re.match(r"(.*[0-9])([+-]\d{2})(\d{2})$", dt)
+        if m2:
+            dt = f"{m2.group(1)}{m2.group(2)}:{m2.group(3)}"
+        return dt
+    return None
+
+
 def _parse_iso_or_min(s: str):
     from datetime import datetime
     if not s:
@@ -608,10 +629,11 @@ def parse_tmp_and_write_raw_csv(tmp_dir: Path):
 
                 fenomeno = detect_phenomenon(entry) or ''
                 ts = datetime.utcnow().isoformat()
-                # intentar extraer fecha de inicio del evento desde el contenido
+                # intentar extraer fechas de inicio y fin del evento desde el contenido
                 start = extract_start_date(entry) or ts
+                end = extract_end_date(entry) or ts
                 excerpt = ' '.join(entry.split())[:300]
-                rows.append([prov, PROVINCIAS.get(prov, ''), subprov, nivel, fenomeno, start, ts, os.path.basename(fpath), excerpt])
+                rows.append([prov, PROVINCIAS.get(prov, ''), subprov, nivel, fenomeno, start, end, ts, os.path.basename(fpath), excerpt])
                 
                 # Guardar el nivel más alto por provincia
                 if prov and prov not in alertas_por_provincia:
@@ -650,7 +672,7 @@ def parse_tmp_and_write_raw_csv(tmp_dir: Path):
 
     with open(out_file, 'w', encoding='utf-8', newline='') as csvf:
         writer = csv.writer(csvf)
-        writer.writerow(['codigo_provincia', 'nombre_provincia', 'subprovincia', 'nivel', 'fenomeno', 'start', 'timestamp', 'source_file', 'excerpt'])
+        writer.writerow(['codigo_provincia', 'nombre_provincia', 'subprovincia', 'nivel', 'fenomeno', 'start', 'end', 'timestamp', 'source_file', 'excerpt'])
         for r in rows:
             writer.writerow(r)
 
