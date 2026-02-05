@@ -22,6 +22,28 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 // Variable global para almacenar todas las sedes
 let todasLasSedes = [];
 
+// Estado de filtros
+let selectedTipologias = new Set();
+let hideAmarillas = false;
+let excludedFenomenos = new Set();
+
+function sedeVisible(sede) {
+    // tipologia
+    if (selectedTipologias.size > 0 && !selectedTipologias.has((sede.tipologia || '').toLowerCase())) {
+        return false;
+    }
+    // ocultar amarillas
+    if (hideAmarillas && sede.alerta && sede.alerta.nivel === 'amarillo') return false;
+    // excluir fenomenos
+    if (sede.alerta && sede.alerta.fenomeno) {
+        const f = sede.alerta.fenomeno.toLowerCase();
+        for (const ex of excludedFenomenos) {
+            if (f.includes(ex)) return false;
+        }
+    }
+    return true;
+}
+
 // Mapa de colores para los niveles de alerta
 const COLORES_ALERTA = {
     rojo: '#DC143C',      // Crimson
@@ -119,12 +141,13 @@ function actualizarEstadisticas() {
         return;
     }
     
-    // Calcular estadísticas basándose en las sedes cargadas
-    const totalSedes = todasLasSedes.length;
-    const rojo = todasLasSedes.filter(s => s.alerta.nivel === 'rojo').length;
-    const naranja = todasLasSedes.filter(s => s.alerta.nivel === 'naranja').length;
-    const amarillo = todasLasSedes.filter(s => s.alerta.nivel === 'amarillo').length;
-    const verde = todasLasSedes.filter(s => s.alerta.nivel === 'verde').length;
+    // Calcular estadísticas basándose en las sedes filtradas
+    const visibles = Array.from(todasLasSedes).filter(sedeVisible);
+    const totalSedes = visibles.length;
+    const rojo = visibles.filter(s => s.alerta.nivel === 'rojo').length;
+    const naranja = visibles.filter(s => s.alerta.nivel === 'naranja').length;
+    const amarillo = visibles.filter(s => s.alerta.nivel === 'amarillo').length;
+    const verde = visibles.filter(s => s.alerta.nivel === 'verde').length;
     const totalAlertas = rojo + naranja + amarillo;
     
     estadisticasDiv.innerHTML = `
@@ -234,21 +257,29 @@ async function cargarSedes() {
     try {
         const response = await fetch('/api/sedes');
         const sedes = await response.json();
-        
+
         todasLasSedes = sedes;
-        
+
+        // Build tipologia filters once
+        if (document.getElementById('tipologiaFilters') && document.getElementById('tipologiaFilters').children.length === 0) {
+            buildTipologiaFilters(sedes);
+        }
+
+        // limpiar marcadores
         map.eachLayer(layer => {
             if (layer instanceof L.Marker) {
                 map.removeLayer(layer);
             }
         });
-        
-        sedes.forEach(sede => {
+
+        // aplicar filtros y añadir marcadores solamente para los visibles
+        const visibles = sedes.filter(sedeVisible);
+        visibles.forEach(sede => {
             const marker = L.marker(
                 [sede.latitud, sede.longitud],
                 { icon: crearIconoAlerta(obtenerColorAlerta(sede.alerta.nivel)) }
             ).addTo(map);
-            
+
             const popupContent = `
                 <div class="popup-title">${sede.nombre}</div>
                 <div class="popup-info">🏢 Tipo: ${sede.tipologia}</div>
@@ -265,15 +296,16 @@ async function cargarSedes() {
                     ${sede.alerta.fenomeno ? `<br>🌧️ ${sede.alerta.fenomeno}` : ''}
                 </div>
             `;
-            
+
             marker.bindPopup(popupContent);
         });
-        
-        renderizarTablaAlertas(sedes);
+
+        // renderizar tabla con las sedes visibles
+        renderizarTablaAlertas(visibles);
         actualizarEstadisticas();
         await actualizarEstadoSincronizacion();
-        
-        console.log(`✅ ${sedes.length} sedes cargadas correctamente`);
+
+        console.log(`✅ ${sedes.length} sedes cargadas correctamente (${visibles.length} visibles según filtros)`);
     } catch (error) {
         console.error('Error cargando sedes:', error);
         document.getElementById('tablaAlertas').innerHTML = `
@@ -367,3 +399,54 @@ document.getElementById('btnCanarias').addEventListener('click', () => {
 
 // Funcionalidad del botón de actualizar
 document.getElementById('btnActualizar').addEventListener('click', forzarActualizacion);
+
+// Inicializar controles de filtro (tipologías y fenómenos)
+function initFilterControls() {
+    const tipologiaContainer = document.getElementById('tipologiaFilters');
+    if (tipologiaContainer) {
+        tipologiaContainer.innerHTML = '';
+    }
+    const hideChk = document.getElementById('hideAmarillas');
+    if (hideChk) {
+        hideChk.checked = hideAmarillas;
+        hideChk.addEventListener('change', (e) => {
+            hideAmarillas = e.target.checked;
+            cargarSedes();
+        });
+    }
+    const fenContainer = document.getElementById('fenomenoFilters');
+    if (fenContainer) {
+        fenContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            cb.addEventListener('change', () => {
+                excludedFenomenos = new Set(Array.from(fenContainer.querySelectorAll('input:checked')).map(i => i.value));
+                cargarSedes();
+            });
+        });
+    }
+}
+
+function buildTipologiaFilters(sedes) {
+    const container = document.getElementById('tipologiaFilters');
+    if (!container) return;
+    const tipos = Array.from(new Set(sedes.map(s => (s.tipologia || '').toLowerCase()).filter(Boolean))).sort();
+    if (!tipos.length) {
+        container.innerHTML = '<small>No hay tipologías</small>';
+        return;
+    }
+    container.innerHTML = '';
+    tipos.forEach(t => {
+        const id = `tip-${t.replace(/[^a-z0-9]/g, '_')}`;
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = `<label><input type="checkbox" id="${id}" value="${t}" checked> ${t}</label>`;
+        container.appendChild(wrapper);
+        const cb = wrapper.querySelector('input');
+        selectedTipologias.add(t);
+        cb.addEventListener('change', (e) => {
+            if (e.target.checked) selectedTipologias.add(t); else selectedTipologias.delete(t);
+            cargarSedes();
+        });
+    });
+}
+
+// inicializar controles (listeners)
+initFilterControls();
