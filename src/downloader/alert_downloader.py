@@ -81,7 +81,8 @@ def recent_download_exists(max_age_seconds=3600):
                 continue
             mtime = entry.stat().st_mtime
             if now - mtime < max_age_seconds:
-                print(f"⏱️  Archivo reciente encontrado: {entry.name} (omitimos descarga)")
+                age = int(now - mtime)
+                print(f"⏱️  Archivo reciente encontrado: {entry.name} (edad {age}s < {max_age_seconds}s) — omitiendo descarga")
                 return True
     except Exception:
         pass
@@ -109,6 +110,9 @@ def fetch_json():
         print('⏳ Otra instancia en ejecución. Se omite esta ejecución.')
         return 0
     try:
+        # Información inicial útil para depuración
+        print(f"📁 DATA_DIR: {DATA_DIR}")
+        print(f"🔑 AEMET_API_KEY: {mask_key(AEMET_API_KEY)}")
         clean_debug_and_tmp()
 
         # Si ya hay una descarga reciente (JSON O tar.gz dentro de la última hora), omitir
@@ -555,9 +559,15 @@ def parse_tmp_and_write_raw_csv(tmp_dir: Path):
         print('⚠️  No se encontraron archivos XML/CAP en tmp para procesar (raw)')
         return
 
+    print(f"📂 Total de archivos XML encontrados: {len(files)}")
+    
     rows = []
     # Agrupar alertas por provincia para el CSV simplificado
     alertas_por_provincia = {}
+    total_entries = 0
+    total_verdes = 0
+    total_costeros = 0
+    total_sin_prov = 0
     
     for fpath in files:
         try:
@@ -573,16 +583,21 @@ def parse_tmp_and_write_raw_csv(tmp_dir: Path):
 
             entries = extract_entries_from_xml(text)
             for entry in entries:
+                total_entries += 1
                 nivel = detect_level(entry)
                 if nivel == 'verde':
+                    total_verdes += 1
                     continue
                 # excluir avisos costeros
                 fenomeno_check = detect_phenomenon(entry) or ''
                 if is_coastal(fenomeno_check) or is_coastal(entry):
+                    total_costeros += 1
                     continue
                 prov = detect_province(entry) or ''
-                # intentar extraer subprovincia
-                subprov = None
+                if not prov:
+                    total_sin_prov += 1
+                    continue
+
                 m = re.search(r"\b(?:zona|área|area|sector|meseta)\s*(?:de\s*)?([A-Za-zÁÉÍÓÚáéíóúñÑ0-9 \-\/]+?)(?:[\.,;\n]|$)", entry, re.IGNORECASE)
                 if m:
                     subprov = m.group(1).strip()
@@ -616,6 +631,9 @@ def parse_tmp_and_write_raw_csv(tmp_dir: Path):
         except Exception as e:
             print('⚠️  Error procesando (raw)', fpath, e)
 
+    # Mostrar resumen de procesamiento
+    print(f"📊 Resumen: {total_entries} entries | {total_verdes} verdes | {total_costeros} costeros | {total_sin_prov} sin provincia | {len(rows)} alertas válidas")
+    
     if not rows:
         print('⚠️  No se encontraron alertas (raw) tras procesar XMLs')
         return

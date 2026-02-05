@@ -406,6 +406,39 @@ nano .env
    sudo docker logs alertas-meteorologicas | grep -i error
 ```
 
+### 🔁 Descargas AEMET (downloader) — cómo depurar
+
+El componente que obtiene los datos de AEMET se ejecuta en el servicio `aemet-downloader` del `docker-compose.yml`. Comprueba lo siguiente:
+
+- **.env / AEMET_API_KEY**: Asegúrate de que `.env` contiene `AEMET_API_KEY=tu_clave` y que `docker-compose` carga ese fichero.
+
+- **Ver logs del downloader**:
+```bash
+# Mostrar logs del contenedor downloader
+sudo docker logs -f alertas-downloader
+```
+
+- **Ejecutar localmente para probar** (sin Docker):
+```bash
+# Instala deps y ejecuta
+pip install -r src/downloader/requirements.txt
+python3 src/downloader/alert_downloader.py
+```
+
+- **¿Por qué puede omitir la descarga?**
+   - Si ya existe en `data/alertas` un fichero reciente (JSON o paquete) el script omite la descarga por diseño. Revisa qué archivos hay y su fecha de modificación:
+```bash
+ls -l data/alertas
+```
+
+- **Forzar una ejecución única en el contenedor**:
+```bash
+# Ejecutar manualmente dentro del contenedor (si ya está en marcha)
+sudo docker exec -it alertas-downloader /bin/sh -c "python /app/src/downloader/alert_downloader.py"
+```
+
+Si tras estas comprobaciones sigue sin descargar, copia aquí los mensajes de log del downloader y los contenidos relevantes de `.env` (sin la clave completa si quieres mantenerla privada) y te ayudo a interpretar los errores.
+
 ### ❌ El contenedor no inicia
 ```bash
 # Ver por qué falló
