@@ -22,6 +22,19 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 // Variable global para almacenar todas las sedes
 let todasLasSedes = [];
 
+// Mapa de colores para los niveles de alerta
+const COLORES_ALERTA = {
+    rojo: '#DC143C',      // Crimson
+    naranja: '#FF8C00',   // Dark Orange
+    amarillo: '#FFD700',  // Gold
+    verde: '#32CD32'      // Lime Green
+};
+
+// Función para obtener color según el nivel
+function obtenerColorAlerta(nivel) {
+    return COLORES_ALERTA[nivel] || COLORES_ALERTA.verde;
+}
+
 // Función para crear icono de marcador personalizado
 function crearIconoAlerta(color) {
     return L.divIcon({
@@ -233,7 +246,7 @@ async function cargarSedes() {
         sedes.forEach(sede => {
             const marker = L.marker(
                 [sede.latitud, sede.longitud],
-                { icon: crearIconoAlerta(sede.alerta.color) }
+                { icon: crearIconoAlerta(obtenerColorAlerta(sede.alerta.nivel)) }
             ).addTo(map);
             
             const popupContent = `
@@ -247,8 +260,8 @@ async function cargarSedes() {
                 <div class="popup-info">📞 ${sede.responsable.telefono}</div>
                 <div class="popup-info">📧 ${sede.responsable.email}</div>
                 <hr style="border: none; border-top: 1px solid #ddd; margin: 8px 0;">
-                <div class="popup-alerta" style="background-color: ${sede.alerta.color}20; color: ${sede.alerta.color};">
-                    ⚠️ Nivel: ${sede.alerta.nombre}
+                <div class="popup-alerta" style="background-color: ${obtenerColorAlerta(sede.alerta.nivel)}20; color: ${obtenerColorAlerta(sede.alerta.nivel)};">
+                    ⚠️ Nivel: ${sede.alerta.nombre_nivel || sede.alerta.nombre}
                     ${sede.alerta.fenomeno ? `<br>🌧️ ${sede.alerta.fenomeno}` : ''}
                 </div>
             `;

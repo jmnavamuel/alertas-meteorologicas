@@ -38,6 +38,14 @@ function findLatestAlertsFile() {
       .filter(f => f.match(/^alertas-\d{8}-\d{4}\.csv$/))
       .map(f => ({
         name: f,
+    // Mapa de nombres descriptivos para niveles de alerta
+    const NOMBRES_NIVEL = {
+      rojo: 'Riesgo Extremo',
+      naranja: 'Importante',
+      amarillo: 'Advertencia',
+      verde: 'Sin riesgo'
+    };
+
         path: path.join(DATA_DIR, f),
         mtime: fs.statSync(path.join(DATA_DIR, f)).mtimeMs
       }))
@@ -61,12 +69,14 @@ function leerAlertasDesdeCSV() {
       console.log('⚠️  CSV de alertas no encontrado en:', DATA_DIR);
       resolve(alertas);
       return;
-    }
-    
-    console.log('📖 Leyendo alertas desde:', path.basename(csvPath));
-    
-    fs.createReadStream(csvPath)
-      .pipe(csv())
+              const nivel = row.nivel || 'verde';
+              alertas[codigo] = {
+                nombre: row.nombre_provincia || 'Desconocida',
+                nivel: nivel,
+                nombre_nivel: NOMBRES_NIVEL[nivel] || 'Desconocido',
+                fenomeno: row.fenomeno !== 'null' ? row.fenomeno : null,
+                timestamp: row.timestamp || new Date().toISOString()
+              };
       .on('data', (row) => {
         const codigo = row.codigo_provincia?.trim();
         if (codigo) {
@@ -92,6 +102,7 @@ function leerAlertasDesdeCSV() {
 // Leer sedes del CSV
 function leerSedes() {
   return new Promise((resolve, reject) => {
+            nombre_nivel: NOMBRES_NIVEL.verde,
     const sedes = [];
     const csvPath = path.join(__dirname, '../data/sedes.csv');
     
