@@ -11,11 +11,81 @@ Sistema de monitorización en tiempo real de alertas meteorológicas de AEMET pa
 - ✅ **API Real de AEMET**: Conexión directa con la API oficial de AEMET
 - 🗺️ **Mapa Interactivo**: Visualización con Leaflet.js
 - 🎨 **4 Niveles de Alerta**: Verde, Amarillo, Naranja y Rojo
-- 🔄 **Actualización Automática**: Refresco cada 5 minutos
-- 💾 **Sistema de Caché**: Optimización de llamadas a la API (10 minutos)
+- 🔄 **Actualización Automática Horaria**: Descarga de datos cada hora automáticamente (sin necesidad de botón manual)
+- 📊 **Actualización UI cada 5 minutos**: Frontend se sincroniza con los datos más recientes
+- 💾 **Filtrado Inteligente**: 
+  - Filtros por tipología de sede (SSCC, Delegación, Clínica Dental, Centro Médico, **Datacenter**)
+  - Filtros de fenómenos solo en tabla (no afecta al mapa)
 - 🐳 **Dockerizado**: Fácil despliegue con Docker Compose
 - 📱 **Responsive**: Adaptado a móviles y tablets
 - 🏝️ **Multi-región**: Soporte para Península y Canarias
+
+---
+
+---
+
+## 🎯 Modo de Funcionamiento
+
+### 🔄 Actualización de Datos AEMET
+
+El sistema descarga datos de la API de AEMET **automáticamente cada hora** sin necesidad de intervención manual:
+
+1. ⏲️ **Al iniciar el servidor**: Se ejecuta inmediatamente una descarga
+2. 🔁 **Cada hora**: Se ejecuta automáticamente el script `alert_downloader.py`
+3. 📥 **Descarga**: Obtiene datos CAP (Common Alerting Protocol) de AEMET en formato XML
+4. 💾 **Procesamiento**: Convierte los datos a CSV y los almacena en `data/alertas-YYYYMMDD-HHMM.csv`
+5. 📊 **Frontend**: La UI se refresca cada 5 minutos para mostrar los datos más recientes
+
+**No hay botón manual para forzar descarga** — el sistema está completamente automatizado.
+
+### 🗺️ Interfaz Web
+
+La interfaz principal muestra:
+
+| Sección | Función |
+|---------|---------|
+| **Mapa** | Marcadores con código de colores indicando nivel de alerta en cada sede |
+| **Leyenda (sidebar)** | Estadísticas de alertas activas y filtros por tipología de sede |
+| **Filtros de Tipología** | Checkboxes para filtrar qué tipos de sedes se muestran en el mapa |
+| **Tabla de Alertas** | Lista de sedes con alertas activas (nivel ≠ verde) |
+| **Filtros de Fenómenos** | Checkboxes en la tabla para excluir fenómenos específicos (solo afecta a la tabla, no al mapa) |
+
+### 🎨 Niveles de Alerta y Colores
+
+```
+🟢 Verde     = Sin riesgo (Latitud: Verde) — No hay alerta activa
+🟡 Amarillo  = Advertencia — Riesgo moderado
+🟠 Naranja   = Importante — Riesgo importante
+🔴 Rojo      = Riesgo Extremo — Máximo riesgo
+```
+
+### 🏢 Tipos de Sede Disponibles
+
+- **SSCC** — Centro de Salud/Servicios Centrales
+- **Delegación** — Oficina Territorial
+- **Clínica Dental** — Servicio Dental
+- **Centro Médico** — Instalación Médica General
+- **Datacenter** — Centro de Procesamiento de Datos
+
+### 📋 Cómo Usar los Filtros
+
+#### Filtro de Tipología (en el Sidebar):
+- ✅ Afecta al **mapa** (solo se muestran marcadores de tipos seleccionados)
+- ✅ Afecta a la **tabla** (solo se muestran alertas de tipos seleccionados)
+- ✅ Afecta a **estadísticas** (recuentos solo de tipos seleccionados)
+
+**Ejemplo**: Si desactivas "Delegación", desaparecen todas las delegaciones del mapa y la tabla
+
+#### Filtro de Fenómenos (en la Tabla):
+- ✅ Afecta **solo a la tabla** (no al mapa)
+- ❌ NO oculta sedes del mapa
+
+**Ejemplo**: Si desactivas "Viento", las sedes con alerta por viento siguen visibles en el mapa, pero no aparecen en la tabla
+
+#### Estadísticas:
+- Muestra recuento total de sedes según filtros de tipología
+- Indica alertas activas (Rojo, Naranja, Amarillo)
+- Se actualiza en tiempo real
 
 ---
 
@@ -335,11 +405,13 @@ nano data/sedes.csv
 
 2. Añade una nueva línea con el formato:
 ```csv
-nombre,calle,codigo_postal,latitud,longitud,provincia
-Mi Nueva Sede,Calle Nueva 1,28001,40.4168,-3.7038,28
+nombre,tipologia,calle,codigo_postal,latitud,longitud,provincia,responsable_nombre,responsable_telefono,responsable_email
+Mi Nueva Sede,SSCC,Calle Nueva 1,28001,40.4168,-3.7038,Madrid,Juan García,+34 91 234 5678,juan@ejemplo.com
 ```
 
-3. Reinicia el contenedor:
+3. Opciones de tipología: `SSCC`, `Delegación`, `Clínica Dental`, `Centro Médico`, `Datacenter`
+
+4. Reinicia el contenedor:
 ```bash
 sudo docker-compose restart
 ```
@@ -347,7 +419,7 @@ sudo docker-compose restart
 Nota importante sobre el CSV:
 - El archivo `data/sedes.csv` debe incluir coordenadas válidas en las columnas `latitud` y `longitud`.
 - Si una fila contiene valores no numéricos o inválidos en latitud/longitud, **esa sede será omitida al cargar los datos** (se registrará una advertencia en los logs del servidor).
-- El campo `provincia` es opcional —si no se proporciona, el servicio intentará inferirla a partir del código postal.
+- El campo `provincia` es el código AEMET (p.ej., 28 para Madrid)
 
 ### Actualizar el sistema:
 ```bash
@@ -406,7 +478,57 @@ nano .env
    sudo docker logs alertas-meteorologicas | grep -i error
 ```
 
-### 🔁 Descargas AEMET (downloader) — cómo depurar
+### 🔁 Descargas AEMET (downloader) — Funcionamiento Automático
+
+El sistema está configurado para ejecutar **automáticamente** el downloader:
+
+- **Al iniciar**: Se ejecuta inmediatamente
+- **Cada hora**: Se ejecuta el script Python según scheduler en `src/server.js`
+
+Esto significa que **no necesitas hacer nada manualmente** — los datos se actualizan automáticamente.
+
+#### Ver logs del downloader:
+```bash
+# Si usas Docker
+sudo docker logs alertas-meteorologicas | grep -i downloader
+
+# O en tiempo real
+sudo docker logs -f alertas-meteorologicas
+```
+
+#### Ejecutar manualmente para probar (sin Docker):
+```bash
+# Instala dependencias
+pip install -r src/downloader/requirements.txt
+
+# Ejecuta el script
+python3 src/downloader/alert_downloader.py
+```
+
+#### Estructura de datos generados:
+
+```
+data/
+├── sedes.csv                                    # Base de datos de sedes
+├── alertas-20260205-1045.csv                    # Alertas procesadas
+├── alertas-20260205-0945.csv                    # Alertas anteriores (archivadas)
+└── alertas/
+    ├── aemet-response-20260205T104549Z.json     # Respuesta JSON de AEMET
+    ├── cd04bd32Z_CAP_C_LEMM_20260205104851.tar  # Archivo CAP comprimido
+    └── tmp/
+        ├── Z_CAP_C_LEMM_20260205090106_AFAZ743103NENV2311.xml
+        ├── Z_CAP_C_LEMM_20260205090414_AFAZ711501COCO2314.xml
+        └── ... (más XMLs)
+```
+
+El servidor automáticamente:
+1. Lee el CSV más reciente de `data/alertas-*.csv`
+2. Sirve los datos a través de `/api/sedes` y `/api/alertas`
+3. La UI los consume cada 5 minutos
+
+**No necesitas hacer commit** de los CSVs generados (están en `.gitignore`).
+
+### 🔁 Descargas AEMET (downloader) — Solución de Problemas (Anterior)
 
 El componente que obtiene los datos de AEMET se ejecuta en el servicio `aemet-downloader` del `docker-compose.yml`. Comprueba lo siguiente:
 
@@ -478,27 +600,42 @@ sudo chown -R tu_usuario:users /volume1/docker/alertas-meteorologicas
 | `/` | GET | Interfaz web principal |
 | `/api/sedes` | GET | Listado de todas las sedes con alertas actuales |
 | `/health` | GET | Health check del servicio |
-| `/api/config/status` | GET | Estado de la configuración |
+| `/api/sincronizacion/estado` | GET | Estado de la última sincronización AEMET |
 
 ### Ejemplo de respuesta de `/api/sedes`:
 ```json
 [
   {
     "nombre": "Sede Madrid Centro",
+    "tipologia": "SSCC",
     "calle": "Calle Gran Vía 28",
     "codigoPostal": "28013",
     "latitud": 40.42,
     "longitud": -3.7038,
-    "provincia": "28",
+    "provincia": "Madrid",
+    "responsable": {
+      "nombre": "Dr. Carlos García Martínez",
+      "telefono": "+34 91 234 5678",
+      "email": "carlos.garcia@ejemplo.com"
+    },
     "alerta": {
-      "color": "#28a745",
-      "nivel": "verde",
       "nombre": "Sin riesgo",
+      "nivel": "verde",
+      "nombre_nivel": "Sin riesgo",
       "fenomeno": null,
-      "actualizacion": "2026-01-18T10:30:00.000Z"
+      "timestamp": "2026-02-05T10:45:00.000Z"
     }
   }
 ]
+```
+
+### Ejemplo de respuesta de `/api/sincronizacion/estado`:
+```json
+{
+  "estado": "ok",
+  "ultimaSincronizacion": "2026-02-05T11:00:00.000Z",
+  "mensaje": "Última sincronización detectada"
+}
 ```
 
 ---
