@@ -24,7 +24,7 @@ let todasLasSedes = [];
 
 // Estado de filtros
 let selectedTipologias = new Set();
-let excludedFenomenos = new Set();
+let selectedFenomenos = new Set();
 
 // Filtro solo para el mapa: aplica solo tipología
 function sedeVisibleEnMapa(sede) {
@@ -41,11 +41,18 @@ function sedeVisibleEnTabla(sede) {
     if (selectedTipologias.size > 0 && !selectedTipologias.has((sede.tipologia || '').toLowerCase())) {
         return false;
     }
-    // excluir fenomenos (solo en tabla)
-    if (sede.alerta && sede.alerta.fenomeno) {
-        const f = sede.alerta.fenomeno.toLowerCase();
-        for (const ex of excludedFenomenos) {
-            if (f.includes(ex)) return false;
+    // filtrar por fenomenos seleccionados (solo en tabla)
+    if (selectedFenomenos.size > 0) {
+        if (sede.alerta && sede.alerta.fenomeno) {
+            const f = sede.alerta.fenomeno.toLowerCase();
+            // incluir si alguno de los seleccionados aparece en la descripción
+            let match = false;
+            for (const sel of selectedFenomenos) {
+                if (f.includes(sel)) { match = true; break; }
+            }
+            if (!match) return false;
+        } else {
+            // si no hay fenómeno especificado, lo incluimos
         }
     }
     return true;
@@ -356,9 +363,12 @@ function initFilterControls() {
     }
     const fenContainerTabla = document.getElementById('fenomenoFiltersTabla');
     if (fenContainerTabla) {
-        fenContainerTabla.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        // Inicializar selectedFenomenos con todos los checkboxes marcados por defecto
+        const boxes = Array.from(fenContainerTabla.querySelectorAll('input[type="checkbox"]'));
+        boxes.forEach(cb => {
+            if (cb.checked) selectedFenomenos.add(cb.value);
             cb.addEventListener('change', () => {
-                excludedFenomenos = new Set(Array.from(fenContainerTabla.querySelectorAll('input:checked')).map(i => i.value));
+                selectedFenomenos = new Set(Array.from(fenContainerTabla.querySelectorAll('input:checked')).map(i => i.value));
                 renderizarTablaAlertas(todasLasSedes);
             });
         });
