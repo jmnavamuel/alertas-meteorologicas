@@ -242,6 +242,7 @@ function renderizarTablaAlertas(sedes) {
                         <th>Responsable</th>
                         <th>Teléfono</th>
                         <th>Tipo de Incidente</th>
+                        <th>Comienzo</th>
                         <th>Actualización</th>
                     </tr>
                 </thead>
@@ -252,7 +253,8 @@ function renderizarTablaAlertas(sedes) {
         const nivelClass = sede.alerta.nivel;
         const nivelNombre = sede.alerta.nombre;
         const fenomeno = sede.alerta.fenomeno || 'No especificado';
-        const actualizacion = formatearFechaRelativa(sede.alerta.actualizacion);
+        const comienzo = formatFechaExacta(sede.alerta.start) || 'No disponible';
+        const actualizacion = formatearFechaRelativa(sede.alerta.timestamp);
         
         html += `
             <tr>
@@ -267,6 +269,7 @@ function renderizarTablaAlertas(sedes) {
                 <td>${sede.responsable.nombre}</td>
                 <td>${sede.responsable.telefono}</td>
                 <td>${fenomeno}</td>
+                <td><small>${comienzo}</small></td>
                 <td><small>${actualizacion}</small></td>
             </tr>
         `;

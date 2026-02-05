@@ -80,6 +80,7 @@ function leerAlertasDesdeCSV() {
             nivel: nivel,
             nombre_nivel: NOMBRES_NIVEL[nivel] || 'Desconocido',
             fenomeno: row.fenomeno !== 'null' ? row.fenomeno : null,
+            start: row.start || row.timestamp || new Date().toISOString(),
             timestamp: row.timestamp || new Date().toISOString()
           };
         }
