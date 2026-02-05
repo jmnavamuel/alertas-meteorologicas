@@ -33,7 +33,7 @@ services:
     container_name: alertas-downloader
     volumes:
       - ./src:/app/src:ro
-      - ./data/alertas:/app/data/alertas:rw
+      - ./data:/app/data:rw
       - /etc/localtime:/etc/localtime:ro
     env_file:
       - .env
