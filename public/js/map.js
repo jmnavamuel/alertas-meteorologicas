@@ -329,10 +329,7 @@ async function cargarSedes() {
 // Cargar sedes al iniciar
 cargarSedes();
 
-// Actualizar cada 5 minutos (300000 ms)
-setInterval(cargarSedes, 300000);
-
-// Actualizar estado de sincronización cada 30 segundos
+// Actualizar estado de sincronización cada 30 segundos (para mostrar cuándo se actualizaron datos)
 setInterval(actualizarEstadoSincronizacion, 30000);
 
 // Funcionalidad del botón de centrar España

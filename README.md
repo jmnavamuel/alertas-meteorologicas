@@ -12,7 +12,7 @@ Sistema de monitorización en tiempo real de alertas meteorológicas de AEMET pa
 - 🗺️ **Mapa Interactivo**: Visualización con Leaflet.js
 - 🎨 **4 Niveles de Alerta**: Verde, Amarillo, Naranja y Rojo
 - 🔄 **Actualización Automática Horaria**: Descarga de datos cada hora automáticamente (sin necesidad de botón manual)
-- 📊 **Actualización UI cada 5 minutos**: Frontend se sincroniza con los datos más recientes
+- 📊 **Frontend Eficiente**: Se carga una sola vez al inicio, sin refresco automático constante
 - 💾 **Filtrado Inteligente**: 
   - Filtros por tipología de sede (SSCC, Delegación, Clínica Dental, Centro Médico, **Datacenter**)
   - Filtros de fenómenos solo en tabla (no afecta al mapa)
@@ -34,9 +34,13 @@ El sistema descarga datos de la API de AEMET **automáticamente cada hora** sin 
 2. 🔁 **Cada hora**: Se ejecuta automáticamente el script `alert_downloader.py`
 3. 📥 **Descarga**: Obtiene datos CAP (Common Alerting Protocol) de AEMET en formato XML
 4. 💾 **Procesamiento**: Convierte los datos a CSV y los almacena en `data/alertas-YYYYMMDD-HHMM.csv`
-5. 📊 **Frontend**: La UI se refresca cada 5 minutos para mostrar los datos más recientes
+5. 📊 **Frontend**: 
+   - Se carga una sola vez al iniciar la página
+   - Muestra los datos del CSV más reciente disponible en el servidor
+   - Monitoriza el "estado de sincronización" cada 30 segundos para saber cuándo hay nuevos datos
+   - **Para ver nuevas alertas, debe recargar la página** (F5 o Cmd+R)
 
-**No hay botón manual para forzar descarga** — el sistema está completamente automatizado.
+**No hay actualización automática cada X minutos** — el frontend solo carga al inicio. Si quieres ver nuevas alertas después de una descarga horaria, recarga la página manualmente.
 
 ### 🗺️ Interfaz Web
 
