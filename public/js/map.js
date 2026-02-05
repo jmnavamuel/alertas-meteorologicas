@@ -27,65 +27,55 @@ let selectedTipologias = new Set();
 let selectedFenomenos = new Set();
 let rangoAlertas = 'actual'; // 'actual', '24h', '48h'
 
-// Filtro solo para el mapa: aplica solo tipología
+// Filtro solo para el mapa: aplica solo tipología (NUNCA filtra por rango temporal)
 function sedeVisibleEnMapa(sede) {
     // tipologia
     if (selectedTipologias.size > 0 && !selectedTipologias.has((sede.tipologia || '').toLowerCase())) {
         return false;
     }
-    // filtro temporal
-    if (!alertaEnRango(sede.alerta)) {
-        return false;
-    }
     return true;
 }
 
-// Verificar si una alerta está en el rango temporal seleccionado
-function alertaEnRango(alerta) {
-    if (!alerta) return false;
+// Obtener la alerta más severa en el rango temporal seleccionado (o null si no hay)
+function obtenerAlertaEnRango(alerta) {
+    if (!alerta) return null;
     const now = new Date();
     const alertaStart = new Date(alerta.start || alerta.timestamp);
-    const alertaEnd = new Date(alerta.end || alerta.timestamp);
     
     switch (rangoAlertas) {
         case 'actual':
             // alertas que ya han comenzado
-            return alertaStart <= now;
+            return alertaStart <= now ? alerta : null;
         case '24h':
-            // alertas que comenzarán en las próximas 24 horas
+            // alertas que comenzarán en las próximas 24 horas (o ya comenzaron)
             const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-            return alertaStart <= in24h;
+            return alertaStart <= in24h ? alerta : null;
         case '48h':
-            // alertas que comenzarán en las próximas 48 horas
+            // alertas que comenzarán en las próximas 48 horas (o ya comenzaron)
             const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
-            return alertaStart <= in48h;
+            return alertaStart <= in48h ? alerta : null;
         default:
-            return true;
+            return alerta;
     }
 }
 
-// Filtro para la tabla: aplica tipología y fenómeno
+// Filtro para la tabla: aplica tipología y fenómeno (pero temporal no oculta)
 function sedeVisibleEnTabla(sede) {
     // tipologia
     if (selectedTipologias.size > 0 && !selectedTipologias.has((sede.tipologia || '').toLowerCase())) {
         return false;
     }
-    // filtro temporal
-    if (!alertaEnRango(sede.alerta)) {
-        return false;
-    }
-    // filtrar por fenomenos seleccionados (solo en tabla)
-    if (selectedFenomenos.size > 0) {
-        if (sede.alerta && sede.alerta.fenomeno) {
-            const f = sede.alerta.fenomeno.toLowerCase();
+    // filtrar por fenomenos seleccionados (solo en tabla, y solo si hay alerta en el rango)
+    const alertaEnRango = obtenerAlertaEnRango(sede.alerta);
+    if (alertaEnRango && selectedFenomenos.size > 0) {
+        if (alertaEnRango.fenomeno) {
+            const f = alertaEnRango.fenomeno.toLowerCase();
             // incluir si alguno de los seleccionados aparece en la descripción
             let match = false;
             for (const sel of selectedFenomenos) {
                 if (f.includes(sel)) { match = true; break; }
             }
             if (!match) return false;
-        } else {
-            // si no hay fenómeno especificado, lo incluimos
         }
     }
     return true;
@@ -209,12 +199,20 @@ function actualizarEstadisticas() {
     }
     
     // Calcular estadísticas basándose en las sedes filtradas por mapa (solo tipología)
+    // Pero usar la alerta EN RANGO para determinar el nivel a mostrar
     const visibles = Array.from(todasLasSedes).filter(sedeVisibleEnMapa);
     const totalSedes = visibles.length;
-    const rojo = visibles.filter(s => s.alerta.nivel === 'rojo').length;
-    const naranja = visibles.filter(s => s.alerta.nivel === 'naranja').length;
-    const amarillo = visibles.filter(s => s.alerta.nivel === 'amarillo').length;
-    const verde = visibles.filter(s => s.alerta.nivel === 'verde').length;
+    
+    let rojo = 0, naranja = 0, amarillo = 0, verde = 0;
+    visibles.forEach(sede => {
+        const alertaEnRango = obtenerAlertaEnRango(sede.alerta);
+        const nivelAMostrar = alertaEnRango ? alertaEnRango.nivel : 'verde';
+        if (nivelAMostrar === 'rojo') rojo++;
+        else if (nivelAMostrar === 'naranja') naranja++;
+        else if (nivelAMostrar === 'amarillo') amarillo++;
+        else verde++;
+    });
+    
     const totalAlertas = rojo + naranja + amarillo;
     
     estadisticasDiv.innerHTML = `
@@ -242,26 +240,29 @@ function actualizarEstadisticas() {
 function renderizarTablaAlertas(sedes) {
     const tablaContainer = document.getElementById('tablaAlertas');
     
-    // Filtrar alertas activas (nivel != verde) y aplicar filtros de tabla (tipología + fenómeno)
-    const alertasActivas = sedes
-        .filter(sede => sede.alerta.nivel !== 'verde')
-        .filter(sedeVisibleEnTabla);
+    // Filtrar TODAS las sedes visibles en tabla (tipología + fenómeno aplicados a la alerta EN RANGO)
+    const sedesVisibles = sedes.filter(sedeVisibleEnTabla);
     
-    if (alertasActivas.length === 0) {
+    if (sedesVisibles.length === 0) {
         tablaContainer.innerHTML = `
             <div class="sin-alertas">
                 <div class="sin-alertas-icon">✅</div>
-                <p><strong>No hay alertas activas en este momento</strong></p>
-                <p>Todas las sedes tienen nivel de riesgo verde (sin riesgo)</p>
+                <p><strong>No hay alertas en este rango temporal</strong></p>
+                <p>Ajusta los filtros para ver más sedes</p>
             </div>
         `;
         return;
     }
     
-    const ordenNiveles = { rojo: 1, naranja: 2, amarillo: 3 };
-    alertasActivas.sort((a, b) => 
-        ordenNiveles[a.alerta.nivel] - ordenNiveles[b.alerta.nivel]
-    );
+    // Ordenar: primero las que tienen alerta en rango (ordenadas por nivel), luego las verdes
+    const ordenNiveles = { rojo: 1, naranja: 2, amarillo: 3, verde: 4 };
+    sedesVisibles.sort((a, b) => {
+        const alertaA = obtenerAlertaEnRango(a.alerta);
+        const alertaB = obtenerAlertaEnRango(b.alerta);
+        const nivelA = alertaA ? alertaA.nivel : 'verde';
+        const nivelB = alertaB ? alertaB.nivel : 'verde';
+        return ordenNiveles[nivelA] - ordenNiveles[nivelB];
+    });
     
     let html = `
         <div class="tabla-alertas">
@@ -282,17 +283,18 @@ function renderizarTablaAlertas(sedes) {
                 <tbody>
     `;
     
-    alertasActivas.forEach(sede => {
-        const nivelClass = sede.alerta.nivel;
-        const nivelNombre = sede.alerta.nombre;
-        const fenomeno = sede.alerta.fenomeno || 'No especificado';
-        const comienzo = formatFechaExacta(sede.alerta.start) || 'No disponible';
-        const actualizacion = formatearFechaRelativa(sede.alerta.timestamp);
+    sedesVisibles.forEach(sede => {
+        const alertaEnRango = obtenerAlertaEnRango(sede.alerta);
+        const nivelAMostrar = alertaEnRango ? alertaEnRango.nivel : 'verde';
+        const nivelNombre = alertaEnRango ? (alertaEnRango.nombre_nivel || alertaEnRango.nombre) : 'Verde';
+        const fenomeno = alertaEnRango && alertaEnRango.fenomeno ? alertaEnRango.fenomeno : 'Sin alerta';
+        const comienzo = alertaEnRango && alertaEnRango.start ? (formatFechaExacta(alertaEnRango.start) || 'No disponible') : '—';
+        const actualizacion = alertaEnRango ? formatearFechaRelativa(alertaEnRango.timestamp) : '—';
         
         html += `
             <tr>
                 <td>
-                    <span class="nivel-badge ${nivelClass}">
+                    <span class="nivel-badge ${nivelAMostrar}">
                         ${nivelNombre}
                     </span>
                 </td>
@@ -308,15 +310,35 @@ function renderizarTablaAlertas(sedes) {
         `;
     });
     
+    // Contar alertas activas (no verdes)
+    const alertasActivas = sedesVisibles.filter(sede => {
+        const alertaEnRango = obtenerAlertaEnRango(sede.alerta);
+        return alertaEnRango && alertaEnRango.nivel !== 'verde';
+    });
+    
+    const rojasCount = alertasActivas.filter(s => {
+        const a = obtenerAlertaEnRango(s.alerta);
+        return a && a.nivel === 'rojo';
+    }).length;
+    const naranjasCount = alertasActivas.filter(s => {
+        const a = obtenerAlertaEnRango(s.alerta);
+        return a && a.nivel === 'naranja';
+    }).length;
+    const amarillasCount = alertasActivas.filter(s => {
+        const a = obtenerAlertaEnRango(s.alerta);
+        return a && a.nivel === 'amarillo';
+    }).length;
+    
     html += `
                 </tbody>
             </table>
         </div>
         <p style="margin-top: 10px; font-size: 12px; color: #666;">
-            <strong>Total de alertas activas:</strong> ${alertasActivas.length} 
-            (🔴 Rojas: ${alertasActivas.filter(s => s.alerta.nivel === 'rojo').length}, 
-            🟠 Naranjas: ${alertasActivas.filter(s => s.alerta.nivel === 'naranja').length}, 
-            🟡 Amarillas: ${alertasActivas.filter(s => s.alerta.nivel === 'amarillo').length})
+            <strong>Total sedes:</strong> ${sedesVisibles.length} | 
+            <strong>Alertas activas:</strong> ${alertasActivas.length}
+            (🔴 Rojas: ${rojasCount}, 
+            🟠 Naranjas: ${naranjasCount}, 
+            🟡 Amarillas: ${amarillasCount})
         </p>
     `;
     
@@ -343,12 +365,17 @@ async function cargarSedes() {
             }
         });
 
-        // aplicar filtros y añadir marcadores solamente para los visibles en el mapa
+        // aplicar filtros y añadir marcadores para TODOS los visibles en el mapa
         const visibles = sedes.filter(sedeVisibleEnMapa);
         visibles.forEach(sede => {
+            // Usar la alerta en rango temporal para determinar el color
+            const alertaEnRango = obtenerAlertaEnRango(sede.alerta);
+            const nivelAMostrar = alertaEnRango ? alertaEnRango.nivel : 'verde';
+            const colorMarker = obtenerColorAlerta(nivelAMostrar);
+            
             const marker = L.marker(
                 [sede.latitud, sede.longitud],
-                { icon: crearIconoAlerta(obtenerColorAlerta(sede.alerta.nivel)) }
+                { icon: crearIconoAlerta(colorMarker) }
             ).addTo(map);
 
             const popupContent = `
@@ -362,9 +389,9 @@ async function cargarSedes() {
                 <div class="popup-info">📞 ${sede.responsable.telefono}</div>
                 <div class="popup-info">📧 ${sede.responsable.email}</div>
                 <hr style="border: none; border-top: 1px solid #ddd; margin: 8px 0;">
-                <div class="popup-alerta" style="background-color: ${obtenerColorAlerta(sede.alerta.nivel)}20; color: ${obtenerColorAlerta(sede.alerta.nivel)};">
-                    ⚠️ Nivel: ${sede.alerta.nombre_nivel || sede.alerta.nombre}
-                    ${sede.alerta.fenomeno ? `<br>🌧️ ${sede.alerta.fenomeno}` : ''}
+                <div class="popup-alerta" style="background-color: ${colorMarker}20; color: ${colorMarker};">
+                    ⚠️ Nivel: ${alertaEnRango ? (alertaEnRango.nombre_nivel || alertaEnRango.nombre) : 'Sin alerta en este rango'}
+                    ${alertaEnRango && alertaEnRango.fenomeno ? `<br>🌧️ ${alertaEnRango.fenomeno}` : ''}
                 </div>
             `;
 
