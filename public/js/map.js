@@ -448,10 +448,8 @@ async function cargarSedes() {
             buildTipologiaFilters(sedes);
         }
 
-        // Build fenomeno filters once
-        if (document.getElementById('fenomenoFiltersTabla') && document.getElementById('fenomenoFiltersTabla').children.length === 0) {
-            buildFenomenoFilters(sedes);
-        }
+        // Build fenomeno filters - siempre actualizar con los datos actuales
+        buildFenomenoFilters(sedes);
 
         // limpiar marcadores
         map.eachLayer(layer => {
@@ -559,7 +557,7 @@ function buildFenomenoFilters(sedes) {
     const container = document.getElementById('fenomenoFiltersTabla');
     if (!container) return;
     
-    // Extraer todos los fenómenos únicos de las alertas
+    // Extraer todos los fenómenos únicos de TODAS las alertas (sin filtrar por rango)
     const fenomenos = new Set();
     sedes.forEach(sede => {
         if (sede.alerta && sede.alerta.fenomeno) {
@@ -567,14 +565,20 @@ function buildFenomenoFilters(sedes) {
         }
     });
     
+    // Si no hay fenómenos en los datos, usar lista predefinida
     if (fenomenos.size === 0) {
-        container.innerHTML = '<small>No hay fenómenos disponibles</small>';
-        return;
+        fenomenos.add('viento');
+        fenomenos.add('nieve');
+        fenomenos.add('lluvia');
+        fenomenos.add('tormenta');
+        fenomenos.add('niebla');
     }
     
     container.innerHTML = '';
     container.className = 'fenomeno-filters';
     
+    // Reconstruir selectedFenomenos solo con fenómenos actuales
+    const fenomenosActuales = new Set();
     Array.from(fenomenos).sort().forEach(fen => {
         const btn = document.createElement('button');
         btn.className = 'fenomeno-btn active';
@@ -582,7 +586,7 @@ function buildFenomenoFilters(sedes) {
         btn.textContent = fen.charAt(0).toUpperCase() + fen.slice(1);
         
         container.appendChild(btn);
-        selectedFenomenos.add(fen);
+        fenomenosActuales.add(fen);
         
         btn.addEventListener('click', (e) => {
             e.preventDefault();
@@ -595,6 +599,9 @@ function buildFenomenoFilters(sedes) {
             renderizarTablaAlertas(todasLasSedes);
         });
     });
+    
+    // Actualizar selectedFenomenos a los fenómenos actuales
+    selectedFenomenos = fenomenosActuales;
 }
 
 function buildTipologiaFilters(sedes) {
