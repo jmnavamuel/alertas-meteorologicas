@@ -134,11 +134,31 @@ async function actualizarEstadoSincronizacion() {
             syncMessage.className = 'sync-message';
         }
         
-        syncTime.textContent = formatearFechaRelativa(estado.ultimaSincronizacion);
-        syncMessage.textContent = estado.mensaje;
+        // Mostrar fecha relativa y fecha exacta si está disponible
+        if (estado.ultimaSincronizacion) {
+            syncTime.textContent = `${formatearFechaRelativa(estado.ultimaSincronizacion)} · ${formatFechaExacta(estado.ultimaSincronizacion)}`;
+        } else {
+            syncTime.textContent = 'Nunca';
+        }
+        // Mostrar mensaje y nombre de archivo si está disponible
+        syncMessage.textContent = estado.mensaje + (estado.archivo ? ` (${estado.archivo})` : '');
         
     } catch (error) {
         console.error('Error actualizando estado de sincronización:', error);
+    }
+}
+
+// Formatear fecha exacta para mostrar timestamp legible
+function formatFechaExacta(isoString) {
+    if (!isoString) return '';
+    try {
+        const fecha = new Date(isoString);
+        return fecha.toLocaleString('es-ES', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+        });
+    } catch (e) {
+        return isoString;
     }
 }
 

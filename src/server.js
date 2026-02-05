@@ -196,12 +196,27 @@ function getLatestAemetFileTime() {
   }
 }
 
+function getLatestAemetFileInfo() {
+  try {
+    const alertasDir = path.join(__dirname, '../data/alertas');
+    if (!fs.existsSync(alertasDir)) return null;
+    const files = fs.readdirSync(alertasDir)
+      .map(f => ({ name: f, path: path.join(alertasDir, f), mtime: fs.statSync(path.join(alertasDir, f)).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime);
+    if (!files.length) return null;
+    return { filename: files[0].name, mtimeISO: new Date(files[0].mtime).toISOString() };
+  } catch (e) {
+    console.error('❌ Error obteniendo info de alertas:', e.message);
+    return null;
+  }
+}
+
 app.get('/api/sincronizacion/estado', (req, res) => {
-  const ultima = getLatestAemetFileTime();
-  if (ultima) {
-    res.json({ estado: 'ok', ultimaSincronizacion: ultima, mensaje: 'Última sincronización detectada' });
+  const info = getLatestAemetFileInfo();
+  if (info) {
+    res.json({ estado: 'ok', ultimaSincronizacion: info.mtimeISO, archivo: info.filename, mensaje: 'Última sincronización detectada' });
   } else {
-    res.json({ estado: 'idle', ultimaSincronizacion: null, mensaje: 'No hay sincronizaciones registradas aún' });
+    res.json({ estado: 'idle', ultimaSincronizacion: null, archivo: null, mensaje: 'No hay sincronizaciones registradas aún' });
   }
 });
 
