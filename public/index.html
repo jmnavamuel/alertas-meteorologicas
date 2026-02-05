@@ -73,40 +73,18 @@
                         </div>
                     </div>
 
-                    <div class="legend-colors">
-                        <h4 style="margin: 0 0 8px 0; font-size: 12px; text-transform: uppercase; color: #999; letter-spacing: 0.5px;">Niveles de Alerta</h4>
-                        <div class="legend-item">
-                            <span class="legend-color verde"></span>
-                            <span>Verde</span>
-                        </div>
-                        <div class="legend-item">
-                            <span class="legend-color amarillo"></span>
-                            <span>Amarillo</span>
-                        </div>
-                        <div class="legend-item">
-                            <span class="legend-color naranja"></span>
-                            <span>Naranja</span>
-                        </div>
-                        <div class="legend-item">
-                            <span class="legend-color rojo"></span>
-                            <span>Rojo</span>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
         
-        <div class="alertas-activas">>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h2 style="margin: 0;">⚠️ Alertas Activas</h2>
-                <div style="font-size:13px;font-weight:600;">
-                    <span style="margin-right:16px;">Mostrar fenómenos en tabla:</span>
-                    <div id="fenomenoFiltersTabla" style="display: inline-block;">
-                        <label style="margin-right:10px;"><input type="checkbox" value="viento" checked> Viento</label>
-                        <label style="margin-right:10px;"><input type="checkbox" value="nieve" checked> Nieve</label>
-                        <label style="margin-right:10px;"><input type="checkbox" value="lluvia" checked> Lluvia</label>
-                        <label style="margin-right:10px;"><input type="checkbox" value="tormenta" checked> Tormenta</label>
-                        <label><input type="checkbox" value="niebla" checked> Niebla</label>
+        <div class="alertas-activas">
+            <div class="alertas-header">
+                <h2>⚠️ Alertas Activas</h2>
+                <div class="fenomeno-filters-wrapper">
+                    <h4 style="margin: 0 0 8px 0; font-size: 12px; text-transform: uppercase; color: #666; letter-spacing: 0.5px;">Filtrar por Fenómeno</h4>
+                    <div id="fenomenoFiltersTabla" class="fenomeno-filters">
+                        <!-- botones de fenómeno generados dinámicamente -->
+                        <small>Cargando fenómenos...</small>
                     </div>
                 </div>
             </div>

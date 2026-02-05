@@ -26,6 +26,8 @@ let todasLasSedes = [];
 let selectedTipologias = new Set();
 let selectedFenomenos = new Set();
 let rangoAlertas = 'actual'; // 'actual', '24h', '48h'
+let sortColumn = null;
+let sortAscending = true;
 
 // Filtro solo para el mapa: aplica solo tipología (NUNCA filtra por rango temporal)
 function sedeVisibleEnMapa(sede) {
@@ -243,6 +245,75 @@ function actualizarEstadisticas() {
 }
 
 // Función para renderizar tabla de alertas activas
+function sortTableData(data, column) {
+    const dataToSort = [...data];
+    
+    if (sortColumn === column) {
+        // Si clickean el mismo columna, toggle el orden
+        sortAscending = !sortAscending;
+    } else {
+        // Nueva columna, resetear a ascendente
+        sortColumn = column;
+        sortAscending = true;
+    }
+    
+    dataToSort.sort((a, b) => {
+        let valA, valB;
+        const alertaA = obtenerAlertaEnRango(a.alerta);
+        const alertaB = obtenerAlertaEnRango(b.alerta);
+        
+        switch(column) {
+            case 'nivel':
+                const ordenNiveles = { rojo: 1, naranja: 2, amarillo: 3 };
+                valA = ordenNiveles[alertaA.nivel];
+                valB = ordenNiveles[alertaB.nivel];
+                break;
+            case 'sede':
+                valA = a.nombre.toLowerCase();
+                valB = b.nombre.toLowerCase();
+                break;
+            case 'tipo':
+                valA = a.tipologia.toLowerCase();
+                valB = b.tipologia.toLowerCase();
+                break;
+            case 'direccion':
+                valA = a.calle.toLowerCase();
+                valB = b.calle.toLowerCase();
+                break;
+            case 'responsable':
+                valA = a.responsable.nombre.toLowerCase();
+                valB = b.responsable.nombre.toLowerCase();
+                break;
+            case 'telefono':
+                valA = a.responsable.telefono;
+                valB = b.responsable.telefono;
+                break;
+            case 'fenomeno':
+                valA = (alertaA.fenomeno || '').toLowerCase();
+                valB = (alertaB.fenomeno || '').toLowerCase();
+                break;
+            case 'comienzo':
+                valA = new Date(alertaA.start || 0).getTime();
+                valB = new Date(alertaB.start || 0).getTime();
+                break;
+            case 'fin':
+                valA = new Date(alertaA.end || 0).getTime();
+                valB = new Date(alertaB.end || 0).getTime();
+                break;
+            default:
+                return 0;
+        }
+        
+        if (typeof valA === 'string') {
+            return sortAscending ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        } else {
+            return sortAscending ? valA - valB : valB - valA;
+        }
+    });
+    
+    return dataToSort;
+}
+
 function renderizarTablaAlertas(sedes) {
     const tablaContainer = document.getElementById('tablaAlertas');
     
@@ -265,34 +336,41 @@ function renderizarTablaAlertas(sedes) {
         return;
     }
     
-    // Ordenar por nivel de severidad
-    const ordenNiveles = { rojo: 1, naranja: 2, amarillo: 3 };
-    alertasActivas.sort((a, b) => {
-        const alertaA = obtenerAlertaEnRango(a.alerta);
-        const alertaB = obtenerAlertaEnRango(b.alerta);
-        return ordenNiveles[alertaA.nivel] - ordenNiveles[alertaB.nivel];
-    });
+    // Ordenar por nivel de severidad por defecto
+    if (!sortColumn) {
+        const ordenNiveles = { rojo: 1, naranja: 2, amarillo: 3 };
+        alertasActivas.sort((a, b) => {
+            const alertaA = obtenerAlertaEnRango(a.alerta);
+            const alertaB = obtenerAlertaEnRango(b.alerta);
+            return ordenNiveles[alertaA.nivel] - ordenNiveles[alertaB.nivel];
+        });
+    } else {
+        sortTableData(alertasActivas, sortColumn);
+    }
     
     let html = `
         <div class="tabla-alertas">
             <table>
                 <thead>
                     <tr>
-                        <th>Nivel</th>
-                        <th>Sede</th>
-                        <th>Tipo</th>
-                        <th>Dirección</th>
-                        <th>Responsable</th>
-                        <th>Teléfono</th>
-                        <th>Tipo de Incidente</th>
-                        <th>Comienzo</th>
-                        <th>Fin de Alerta</th>
+                        <th data-column="nivel" class="${sortColumn === 'nivel' ? (sortAscending ? 'sort-asc' : 'sort-desc') : ''}">Nivel</th>
+                        <th data-column="sede" class="${sortColumn === 'sede' ? (sortAscending ? 'sort-asc' : 'sort-desc') : ''}">Sede</th>
+                        <th data-column="tipo" class="${sortColumn === 'tipo' ? (sortAscending ? 'sort-asc' : 'sort-desc') : ''}">Tipo</th>
+                        <th data-column="direccion" class="${sortColumn === 'direccion' ? (sortAscending ? 'sort-asc' : 'sort-desc') : ''}">Dirección</th>
+                        <th data-column="responsable" class="${sortColumn === 'responsable' ? (sortAscending ? 'sort-asc' : 'sort-desc') : ''}">Responsable</th>
+                        <th data-column="telefono" class="${sortColumn === 'telefono' ? (sortAscending ? 'sort-asc' : 'sort-desc') : ''}">Teléfono</th>
+                        <th data-column="fenomeno" class="${sortColumn === 'fenomeno' ? (sortAscending ? 'sort-asc' : 'sort-desc') : ''}">Tipo de Incidente</th>
+                        <th data-column="comienzo" class="${sortColumn === 'comienzo' ? (sortAscending ? 'sort-asc' : 'sort-desc') : ''}">Comienzo</th>
+                        <th data-column="fin" class="${sortColumn === 'fin' ? (sortAscending ? 'sort-asc' : 'sort-desc') : ''}">Fin de Alerta</th>
                     </tr>
                 </thead>
                 <tbody>
     `;
     
-    alertasActivas.forEach(sede => {
+    // Aplicar ordenamiento si está configurado
+    const datosOrdenados = sortColumn ? sortTableData(alertasActivas, sortColumn) : alertasActivas;
+    
+    datosOrdenados.forEach(sede => {
         const alertaEnRango = obtenerAlertaEnRango(sede.alerta);
         const nivelAMostrar = alertaEnRango.nivel;
         const nivelNombre = alertaEnRango.nombre_nivel || alertaEnRango.nombre;
@@ -320,11 +398,11 @@ function renderizarTablaAlertas(sedes) {
     });
     
     // Contar por nivel
-    const rojasCount = alertasActivas.filter(s => {
+    const rojasCount = datosOrdenados.filter(s => {
         const a = obtenerAlertaEnRango(s.alerta);
         return a && a.nivel === 'rojo';
     }).length;
-    const naranjasCount = alertasActivas.filter(s => {
+    const naranjasCount = datosOrdenados.filter(s => {
         const a = obtenerAlertaEnRango(s.alerta);
         return a && a.nivel === 'naranja';
     }).length;
@@ -338,7 +416,7 @@ function renderizarTablaAlertas(sedes) {
             </table>
         </div>
         <p style="margin-top: 10px; font-size: 12px; color: #666;">
-            <strong>Total de alertas activas:</strong> ${alertasActivas.length}
+            <strong>Total de alertas activas:</strong> ${datosOrdenados.length}
             (🔴 Rojas: ${rojasCount}, 
             🟠 Naranjas: ${naranjasCount}, 
             🟡 Amarillas: ${amarillasCount})
@@ -346,6 +424,15 @@ function renderizarTablaAlertas(sedes) {
     `;
     
     tablaContainer.innerHTML = html;
+    
+    // Añadir event listeners a los headers para ordenamiento
+    document.querySelectorAll('.tabla-alertas th[data-column]').forEach(th => {
+        th.addEventListener('click', () => {
+            const column = th.dataset.column;
+            sortTableData(alertasActivas, column);
+            renderizarTablaAlertas(sedes);
+        });
+    });
 }
 
 // Cargar y mostrar sedes
@@ -359,6 +446,11 @@ async function cargarSedes() {
         // Build tipologia filters once
         if (document.getElementById('tipologiaFilters') && document.getElementById('tipologiaFilters').children.length === 0) {
             buildTipologiaFilters(sedes);
+        }
+
+        // Build fenomeno filters once
+        if (document.getElementById('fenomenoFiltersTabla') && document.getElementById('fenomenoFiltersTabla').children.length === 0) {
+            buildFenomenoFilters(sedes);
         }
 
         // limpiar marcadores
@@ -461,18 +553,48 @@ function initFilterControls() {
     if (tipologiaContainer) {
         tipologiaContainer.innerHTML = '';
     }
-    const fenContainerTabla = document.getElementById('fenomenoFiltersTabla');
-    if (fenContainerTabla) {
-        // Inicializar selectedFenomenos con todos los checkboxes marcados por defecto
-        const boxes = Array.from(fenContainerTabla.querySelectorAll('input[type="checkbox"]'));
-        boxes.forEach(cb => {
-            if (cb.checked) selectedFenomenos.add(cb.value);
-            cb.addEventListener('change', () => {
-                selectedFenomenos = new Set(Array.from(fenContainerTabla.querySelectorAll('input:checked')).map(i => i.value));
-                renderizarTablaAlertas(todasLasSedes);
-            });
-        });
+}
+
+function buildFenomenoFilters(sedes) {
+    const container = document.getElementById('fenomenoFiltersTabla');
+    if (!container) return;
+    
+    // Extraer todos los fenómenos únicos de las alertas
+    const fenomenos = new Set();
+    sedes.forEach(sede => {
+        if (sede.alerta && sede.alerta.fenomeno) {
+            fenomenos.add(sede.alerta.fenomeno.toLowerCase());
+        }
+    });
+    
+    if (fenomenos.size === 0) {
+        container.innerHTML = '<small>No hay fenómenos disponibles</small>';
+        return;
     }
+    
+    container.innerHTML = '';
+    container.className = 'fenomeno-filters';
+    
+    Array.from(fenomenos).sort().forEach(fen => {
+        const btn = document.createElement('button');
+        btn.className = 'fenomeno-btn active';
+        btn.dataset.value = fen;
+        btn.textContent = fen.charAt(0).toUpperCase() + fen.slice(1);
+        
+        container.appendChild(btn);
+        selectedFenomenos.add(fen);
+        
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            btn.classList.toggle('active');
+            if (btn.classList.contains('active')) {
+                selectedFenomenos.add(fen);
+            } else {
+                selectedFenomenos.delete(fen);
+            }
+            renderizarTablaAlertas(todasLasSedes);
+        });
+    });
 }
 
 function buildTipologiaFilters(sedes) {
