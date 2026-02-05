@@ -4,6 +4,7 @@ const fs = require('fs');
 const csv = require('csv-parser');
 const path = require('path');
 const cors = require('cors');
+const { exec } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3100;
@@ -31,6 +32,14 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
+// Mapa de nombres descriptivos para niveles de alerta
+const NOMBRES_NIVEL = {
+  rojo: 'Riesgo Extremo',
+  naranja: 'Importante',
+  amarillo: 'Advertencia',
+  verde: 'Sin riesgo'
+};
+
 // Buscar el archivo alertas-*.csv más reciente en DATA_DIR
 function findLatestAlertsFile() {
   try {
@@ -38,19 +47,10 @@ function findLatestAlertsFile() {
       .filter(f => f.match(/^alertas-\d{8}-\d{4}\.csv$/))
       .map(f => ({
         name: f,
-    // Mapa de nombres descriptivos para niveles de alerta
-    const NOMBRES_NIVEL = {
-      rojo: 'Riesgo Extremo',
-      naranja: 'Importante',
-      amarillo: 'Advertencia',
-      verde: 'Sin riesgo'
-    };
-
         path: path.join(DATA_DIR, f),
         mtime: fs.statSync(path.join(DATA_DIR, f)).mtimeMs
       }))
       .sort((a, b) => b.mtime - a.mtime);
-    
     return files.length > 0 ? files[0].path : null;
   } catch (err) {
     console.error('❌ Error buscando archivo de alertas:', err.message);
@@ -63,26 +63,22 @@ function leerAlertasDesdeCSV() {
   return new Promise((resolve) => {
     const alertas = {};
     const csvPath = findLatestAlertsFile();
-    
-    // Si no existe archivo, devolver objeto vacío (sin alertas)
     if (!csvPath) {
       console.log('⚠️  CSV de alertas no encontrado en:', DATA_DIR);
       resolve(alertas);
       return;
-              const nivel = row.nivel || 'verde';
-              alertas[codigo] = {
-                nombre: row.nombre_provincia || 'Desconocida',
-                nivel: nivel,
-                nombre_nivel: NOMBRES_NIVEL[nivel] || 'Desconocido',
-                fenomeno: row.fenomeno !== 'null' ? row.fenomeno : null,
-                timestamp: row.timestamp || new Date().toISOString()
-              };
+    }
+    console.log('📖 Leyendo alertas desde:', path.basename(csvPath));
+    fs.createReadStream(csvPath)
+      .pipe(csv())
       .on('data', (row) => {
         const codigo = row.codigo_provincia?.trim();
         if (codigo) {
+          const nivel = (row.nivel || 'verde').toLowerCase();
           alertas[codigo] = {
             nombre: row.nombre_provincia || 'Desconocida',
-            nivel: row.nivel || 'verde',
+            nivel: nivel,
+            nombre_nivel: NOMBRES_NIVEL[nivel] || 'Desconocido',
             fenomeno: row.fenomeno !== 'null' ? row.fenomeno : null,
             timestamp: row.timestamp || new Date().toISOString()
           };
@@ -102,29 +98,23 @@ function leerAlertasDesdeCSV() {
 // Leer sedes del CSV
 function leerSedes() {
   return new Promise((resolve, reject) => {
-            nombre_nivel: NOMBRES_NIVEL.verde,
     const sedes = [];
     const csvPath = path.join(__dirname, '../data/sedes.csv');
-    
     if (!fs.existsSync(csvPath)) {
       console.error('❌ No se encuentra el archivo CSV:', csvPath);
       reject(new Error('Archivo CSV no encontrado'));
       return;
     }
-    
     console.log('📄 Leyendo CSV desde:', csvPath);
-    
     fs.createReadStream(csvPath)
       .pipe(csv())
       .on('data', (row) => {
         const lat = parseFloat(row.latitud);
         const lon = parseFloat(row.longitud);
-
         if (Number.isNaN(lat) || Number.isNaN(lon)) {
           console.warn('⚠️  Omitiendo sede con coordenadas inválidas:', row.nombre, row.latitud, row.longitud);
           return;
         }
-
         sedes.push({
           nombre: row.nombre,
           tipologia: row.tipologia || 'SSCC',
@@ -188,6 +178,44 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString()
+  });
+});
+
+// Obtener estado de sincronización
+function getLatestAemetFileTime() {
+  try {
+    const alertasDir = path.join(__dirname, '../data/alertas');
+    if (!fs.existsSync(alertasDir)) return null;
+    const files = fs.readdirSync(alertasDir)
+      .map(f => ({f, mtime: fs.statSync(path.join(alertasDir, f)).mtimeMs}))
+      .sort((a,b) => b.mtime - a.mtime);
+    if (!files.length) return null;
+    return new Date(files[0].mtime).toISOString();
+  } catch (e) {
+    return null;
+  }
+}
+
+app.get('/api/sincronizacion/estado', (req, res) => {
+  const ultima = getLatestAemetFileTime();
+  if (ultima) {
+    res.json({ estado: 'ok', ultimaSincronizacion: ultima, mensaje: 'Última sincronización detectada' });
+  } else {
+    res.json({ estado: 'idle', ultimaSincronizacion: null, mensaje: 'No hay sincronizaciones registradas aún' });
+  }
+});
+
+// Forzar una sincronización: ejecutar el script Python del downloader
+app.post('/api/sincronizacion/forzar', (req, res) => {
+  const cmd = 'python3 src/downloader/alert_downloader.py';
+  exec(cmd, { cwd: path.join(__dirname, '..'), timeout: 5 * 60 * 1000 }, (error, stdout, stderr) => {
+    if (error) {
+      console.error('❌ Error ejecutando downloader:', error.message);
+      console.error(stderr);
+      return res.json({ success: false, message: stderr || error.message });
+    }
+    console.log('✅ Downloader ejecutado manualmente');
+    return res.json({ success: true, message: 'Descarga iniciada', output: stdout });
   });
 });
 
