@@ -31,18 +31,39 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
+// Buscar el archivo alertas-*.csv más reciente en DATA_DIR
+function findLatestAlertsFile() {
+  try {
+    const files = fs.readdirSync(DATA_DIR)
+      .filter(f => f.match(/^alertas-\d{8}-\d{4}\.csv$/))
+      .map(f => ({
+        name: f,
+        path: path.join(DATA_DIR, f),
+        mtime: fs.statSync(path.join(DATA_DIR, f)).mtimeMs
+      }))
+      .sort((a, b) => b.mtime - a.mtime);
+    
+    return files.length > 0 ? files[0].path : null;
+  } catch (err) {
+    console.error('❌ Error buscando archivo de alertas:', err.message);
+    return null;
+  }
+}
+
 // Leer alertas del CSV generado por el script Python
 function leerAlertasDesdeCSV() {
   return new Promise((resolve) => {
     const alertas = {};
-    const csvPath = path.join(DATA_DIR, 'alertas-latest.csv');
+    const csvPath = findLatestAlertsFile();
     
     // Si no existe archivo, devolver objeto vacío (sin alertas)
-    if (!fs.existsSync(csvPath)) {
-      console.log('⚠️  CSV de alertas no encontrado aún:', csvPath);
+    if (!csvPath) {
+      console.log('⚠️  CSV de alertas no encontrado en:', DATA_DIR);
       resolve(alertas);
       return;
     }
+    
+    console.log('📖 Leyendo alertas desde:', path.basename(csvPath));
     
     fs.createReadStream(csvPath)
       .pipe(csv())
@@ -58,10 +79,11 @@ function leerAlertasDesdeCSV() {
         }
       })
       .on('end', () => {
+        console.log(`✅ Alertas cargadas: ${Object.keys(alertas).length} provincias`);
         resolve(alertas);
       })
-      .on('error', () => {
-        // En caso de error, devolver objeto vacío
+      .on('error', (err) => {
+        console.error('⚠️  Error leyendo CSV:', err.message);
         resolve(alertas);
       });
   });
