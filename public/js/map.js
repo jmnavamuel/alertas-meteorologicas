@@ -41,17 +41,23 @@ function obtenerAlertaEnRango(alerta) {
     if (!alerta) return null;
     const now = new Date();
     const alertaStart = new Date(alerta.start || alerta.timestamp);
+    const alertaEnd = alerta.end ? new Date(alerta.end) : null;
+    
+    // Si la alerta ya ha terminado, no mostrar (para cualquier rango)
+    if (alertaEnd && alertaEnd <= now) {
+        return null;
+    }
     
     switch (rangoAlertas) {
         case 'actual':
-            // alertas que ya han comenzado
+            // alertas vigentes: que ya han comenzado Y aún no han terminado
             return alertaStart <= now ? alerta : null;
         case '24h':
-            // alertas que comenzarán en las próximas 24 horas (o ya comenzaron)
+            // alertas que comienzan en las próximas 24h (o ya comenzaron) Y aún no han terminado
             const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
             return alertaStart <= in24h ? alerta : null;
         case '48h':
-            // alertas que comenzarán en las próximas 48 horas (o ya comenzaron)
+            // alertas que comienzan en las próximas 48h (o ya comenzaron) Y aún no han terminado
             const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
             return alertaStart <= in48h ? alerta : null;
         default:
@@ -280,7 +286,7 @@ function renderizarTablaAlertas(sedes) {
                         <th>Teléfono</th>
                         <th>Tipo de Incidente</th>
                         <th>Comienzo</th>
-                        <th>Actualización</th>
+                        <th>Fin de Alerta</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -292,7 +298,7 @@ function renderizarTablaAlertas(sedes) {
         const nivelNombre = alertaEnRango.nombre_nivel || alertaEnRango.nombre;
         const fenomeno = alertaEnRango.fenomeno || 'No especificado';
         const comienzo = formatFechaExacta(alertaEnRango.start) || 'No disponible';
-        const actualizacion = formatearFechaRelativa(alertaEnRango.timestamp);
+        const fin = alertaEnRango.end ? (formatFechaExacta(alertaEnRango.end) || 'No disponible') : 'No especificado';
         
         html += `
             <tr>
@@ -308,7 +314,7 @@ function renderizarTablaAlertas(sedes) {
                 <td>${sede.responsable.telefono}</td>
                 <td>${fenomeno}</td>
                 <td><small>${comienzo}</small></td>
-                <td><small>${actualizacion}</small></td>
+                <td><small>${fin}</small></td>
             </tr>
         `;
     });
