@@ -240,28 +240,31 @@ function actualizarEstadisticas() {
 function renderizarTablaAlertas(sedes) {
     const tablaContainer = document.getElementById('tablaAlertas');
     
-    // Filtrar TODAS las sedes visibles en tabla (tipología + fenómeno aplicados a la alerta EN RANGO)
-    const sedesVisibles = sedes.filter(sedeVisibleEnTabla);
+    // Filtrar solo alertas activas (rojo, naranja, amarillo) en el rango temporal seleccionado
+    const alertasActivas = sedes
+        .filter(sedeVisibleEnTabla)
+        .filter(sede => {
+            const alertaEnRango = obtenerAlertaEnRango(sede.alerta);
+            return alertaEnRango && ['rojo', 'naranja', 'amarillo'].includes(alertaEnRango.nivel);
+        });
     
-    if (sedesVisibles.length === 0) {
+    if (alertasActivas.length === 0) {
         tablaContainer.innerHTML = `
             <div class="sin-alertas">
                 <div class="sin-alertas-icon">✅</div>
-                <p><strong>No hay alertas en este rango temporal</strong></p>
-                <p>Ajusta los filtros para ver más sedes</p>
+                <p><strong>No hay alertas activas en este rango temporal</strong></p>
+                <p>Todas las sedes tienen nivel de riesgo verde (sin riesgo)</p>
             </div>
         `;
         return;
     }
     
-    // Ordenar: primero las que tienen alerta en rango (ordenadas por nivel), luego las verdes
-    const ordenNiveles = { rojo: 1, naranja: 2, amarillo: 3, verde: 4 };
-    sedesVisibles.sort((a, b) => {
+    // Ordenar por nivel de severidad
+    const ordenNiveles = { rojo: 1, naranja: 2, amarillo: 3 };
+    alertasActivas.sort((a, b) => {
         const alertaA = obtenerAlertaEnRango(a.alerta);
         const alertaB = obtenerAlertaEnRango(b.alerta);
-        const nivelA = alertaA ? alertaA.nivel : 'verde';
-        const nivelB = alertaB ? alertaB.nivel : 'verde';
-        return ordenNiveles[nivelA] - ordenNiveles[nivelB];
+        return ordenNiveles[alertaA.nivel] - ordenNiveles[alertaB.nivel];
     });
     
     let html = `
@@ -283,13 +286,13 @@ function renderizarTablaAlertas(sedes) {
                 <tbody>
     `;
     
-    sedesVisibles.forEach(sede => {
+    alertasActivas.forEach(sede => {
         const alertaEnRango = obtenerAlertaEnRango(sede.alerta);
-        const nivelAMostrar = alertaEnRango ? alertaEnRango.nivel : 'verde';
-        const nivelNombre = alertaEnRango ? (alertaEnRango.nombre_nivel || alertaEnRango.nombre) : 'Verde';
-        const fenomeno = alertaEnRango && alertaEnRango.fenomeno ? alertaEnRango.fenomeno : 'Sin alerta';
-        const comienzo = alertaEnRango && alertaEnRango.start ? (formatFechaExacta(alertaEnRango.start) || 'No disponible') : '—';
-        const actualizacion = alertaEnRango ? formatearFechaRelativa(alertaEnRango.timestamp) : '—';
+        const nivelAMostrar = alertaEnRango.nivel;
+        const nivelNombre = alertaEnRango.nombre_nivel || alertaEnRango.nombre;
+        const fenomeno = alertaEnRango.fenomeno || 'No especificado';
+        const comienzo = formatFechaExacta(alertaEnRango.start) || 'No disponible';
+        const actualizacion = formatearFechaRelativa(alertaEnRango.timestamp);
         
         html += `
             <tr>
@@ -310,12 +313,7 @@ function renderizarTablaAlertas(sedes) {
         `;
     });
     
-    // Contar alertas activas (no verdes)
-    const alertasActivas = sedesVisibles.filter(sede => {
-        const alertaEnRango = obtenerAlertaEnRango(sede.alerta);
-        return alertaEnRango && alertaEnRango.nivel !== 'verde';
-    });
-    
+    // Contar por nivel
     const rojasCount = alertasActivas.filter(s => {
         const a = obtenerAlertaEnRango(s.alerta);
         return a && a.nivel === 'rojo';
@@ -334,8 +332,7 @@ function renderizarTablaAlertas(sedes) {
             </table>
         </div>
         <p style="margin-top: 10px; font-size: 12px; color: #666;">
-            <strong>Total sedes:</strong> ${sedesVisibles.length} | 
-            <strong>Alertas activas:</strong> ${alertasActivas.length}
+            <strong>Total de alertas activas:</strong> ${alertasActivas.length}
             (🔴 Rojas: ${rojasCount}, 
             🟠 Naranjas: ${naranjasCount}, 
             🟡 Amarillas: ${amarillasCount})
