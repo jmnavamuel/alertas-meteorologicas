@@ -24,7 +24,6 @@ let todasLasSedes = [];
 
 // Estado de filtros
 let selectedTipologias = new Set();
-let hideAmarillas = false;
 let excludedFenomenos = new Set();
 
 function sedeVisible(sede) {
@@ -32,8 +31,6 @@ function sedeVisible(sede) {
     if (selectedTipologias.size > 0 && !selectedTipologias.has((sede.tipologia || '').toLowerCase())) {
         return false;
     }
-    // ocultar amarillas
-    if (hideAmarillas && sede.alerta && sede.alerta.nivel === 'amarillo') return false;
     // excluir fenomenos
     if (sede.alerta && sede.alerta.fenomeno) {
         const f = sede.alerta.fenomeno.toLowerCase();
@@ -348,14 +345,6 @@ function initFilterControls() {
     const tipologiaContainer = document.getElementById('tipologiaFilters');
     if (tipologiaContainer) {
         tipologiaContainer.innerHTML = '';
-    }
-    const hideChk = document.getElementById('hideAmarillas');
-    if (hideChk) {
-        hideChk.checked = hideAmarillas;
-        hideChk.addEventListener('change', (e) => {
-            hideAmarillas = e.target.checked;
-            cargarSedes();
-        });
     }
     const fenContainer = document.getElementById('fenomenoFilters');
     if (fenContainer) {
