@@ -422,10 +422,16 @@ async function cargarSedes() {
 // Cargar sedes al iniciar
 cargarSedes();
 
-// Agregar listeners para los filtros de rango temporal
-document.querySelectorAll('input[name="rangoAlertas"]').forEach(radio => {
-    radio.addEventListener('change', (e) => {
-        rangoAlertas = e.target.value;
+// Agregar listeners para los botones de rango temporal
+document.querySelectorAll('.rango-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        // Remover clase active de todos los botones
+        document.querySelectorAll('.rango-btn').forEach(b => b.classList.remove('active'));
+        // Añadir clase active al botón clickeado
+        e.target.closest('.rango-btn').classList.add('active');
+        // Actualizar variable global
+        rangoAlertas = e.target.closest('.rango-btn').dataset.value;
+        // Recargar sedes
         cargarSedes();
     });
 });

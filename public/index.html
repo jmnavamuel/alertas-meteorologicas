@@ -77,17 +77,26 @@
 
                     <div class="filters" style="margin-top:12px;">
                         <h4 style="margin:6px 0 8px 0">Rango de Alertas</h4>
-                        <div style="font-size:13px;">
-                            <label><input type="radio" name="rangoAlertas" value="actual" checked> Alertas Actuales</label><br>
-                            <label><input type="radio" name="rangoAlertas" value="24h"> Próximas 24h</label><br>
-                            <label><input type="radio" name="rangoAlertas" value="48h"> Próximas 48h</label>
+                        <div id="rangoAlertasButtons" class="rango-alertas-buttons">
+                            <button class="rango-btn active" data-value="actual">
+                                <span class="rango-icon">📅</span>
+                                Actuales
+                            </button>
+                            <button class="rango-btn" data-value="24h">
+                                <span class="rango-icon">⏱️</span>
+                                24h
+                            </button>
+                            <button class="rango-btn" data-value="48h">
+                                <span class="rango-icon">⏰</span>
+                                48h
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
         
-        <div class="alertas-activas">
+        <div class="alertas-activas">>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <h2 style="margin: 0;">⚠️ Alertas Activas</h2>
                 <div style="font-size:13px;font-weight:600;">
