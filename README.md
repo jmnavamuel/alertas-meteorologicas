@@ -33,14 +33,11 @@ El sistema descarga datos de la API de AEMET **automáticamente cada hora** sin 
 1. ⏲️ **Al iniciar el servidor**: Se ejecuta inmediatamente una descarga
 2. 🔁 **Cada hora**: Se ejecuta automáticamente el script `alert_downloader.py`
 3. 📥 **Descarga**: Obtiene datos CAP (Common Alerting Protocol) de AEMET en formato XML
-4. 💾 **Procesamiento**: Convierte los datos a CSV y los almacena en `data/alertas-YYYYMMDD-HHMM.csv`
+4. 💾 **Procesamiento**: Convierte los datos a CSV con información de fecha de inicio y fin de alerta
 5. 📊 **Frontend**: 
    - Se carga una sola vez al iniciar la página
-   - Muestra los datos del CSV más reciente disponible en el servidor
-   - Monitoriza el "estado de sincronización" cada 30 segundos para saber cuándo hay nuevos datos
-   - **Para ver nuevas alertas, debe recargar la página** (F5 o Cmd+R)
-
-**No hay actualización automática cada X minutos** — el frontend solo carga al inicio. Si quieres ver nuevas alertas después de una descarga horaria, recarga la página manualmente.
+   - Muestra todos los datos (sedes y alertas) del CSV más reciente
+   - **Para ver nuevas alertas después de una descarga**, recarga la página (F5 o Cmd+R)
 
 ### 🗺️ Interfaz Web
 
@@ -48,11 +45,12 @@ La interfaz principal muestra:
 
 | Sección | Función |
 |---------|---------|
-| **Mapa** | Marcadores con código de colores indicando nivel de alerta en cada sede |
-| **Leyenda (sidebar)** | Estadísticas de alertas activas y filtros por tipología de sede |
-| **Filtros de Tipología** | Checkboxes para filtrar qué tipos de sedes se muestran en el mapa |
-| **Tabla de Alertas** | Lista de sedes con alertas activas (nivel ≠ verde) |
-| **Filtros de Fenómenos** | Checkboxes en la tabla para excluir fenómenos específicos (solo afecta a la tabla, no al mapa) |
+| **Mapa** | Marcadores con código de colores indicando nivel de alerta en cada sede (SIEMPRE se muestran todas) |
+| **Leyenda (sidebar)** | Estadísticas de alertas activas, filtros por tipología de sede y selector de rango temporal |
+| **Rango Temporal** | Selector radio para "Alertas Actuales", "Próximas 24h" o "Próximas 48h" |
+| **Filtros de Tipología** | Checkboxes para filtrar qué tipos de sedes se muestran (afecta a mapa y tabla) |
+| **Tabla de Alertas** | Lista de sedes CON ALERTAS ACTIVAS (solo rojo, naranja, amarillo - no verdes) |
+| **Filtros de Fenómenos** | Checkboxes para filtrar tipos de fenómenos en la tabla (solo afecta a la tabla, no al mapa) |
 
 ### 🎨 Niveles de Alerta y Colores
 
@@ -82,13 +80,24 @@ La interfaz principal muestra:
 
 #### Filtro de Fenómenos (en la Tabla):
 - ✅ Afecta **solo a la tabla** (no al mapa)
+- ✅ **Se muestran por defecto** (todos los fenómenos activos)
 - ❌ NO oculta sedes del mapa
 
-**Ejemplo**: Si desactivas "Viento", las sedes con alerta por viento siguen visibles en el mapa, pero no aparecen en la tabla
+**Ejemplo**: Desactivar "Viento" filtra la tabla para ocultar solo las alertas por viento, pero las sedes siguen visibles en el mapa
+
+#### Rango Temporal (Selector Radio):
+- **Alertas Actuales**: Muestra solo alertas que ya han comenzado
+- **Próximas 24h**: Muestra alertas que comenzarán en las próximas 24 horas
+- **Próximas 48h**: Muestra alertas que comenzarán en las próximas 48 horas
+- ✅ Afecta tanto al **mapa como a la tabla** (cambian los colores según el rango)
+- ✅ En el mapa: sedes sin alerta en ese rango aparecen en **VERDE**
+- ✅ En la tabla: solo aparecen sedes con alertas activas (rojo/naranja/amarillo) en ese rango
+
+**Ejemplo**: Si seleccionas "Próximas 24h", verás alertas que eventualmente afectarán a las sedes, mientras que "Alertas Actuales" solo muestra las que ya están en vigor
 
 #### Estadísticas:
 - Muestra recuento total de sedes según filtros de tipología
-- Indica alertas activas (Rojo, Naranja, Amarillo)
+- Indica alertas activas (Rojo, Naranja, Amarillo) en el rango temporal seleccionado
 - Se actualiza en tiempo real
 
 ---
@@ -514,7 +523,7 @@ python3 src/downloader/alert_downloader.py
 ```
 data/
 ├── sedes.csv                                    # Base de datos de sedes
-├── alertas-20260205-1045.csv                    # Alertas procesadas
+├── alertas-20260205-1045.csv                    # Alertas procesadas (con inicio/fin)
 ├── alertas-20260205-0945.csv                    # Alertas anteriores (archivadas)
 └── alertas/
     ├── aemet-response-20260205T104549Z.json     # Respuesta JSON de AEMET
@@ -527,8 +536,9 @@ data/
 
 El servidor automáticamente:
 1. Lee el CSV más reciente de `data/alertas-*.csv`
-2. Sirve los datos a través de `/api/sedes` y `/api/alertas`
-3. La UI los consume cada 5 minutos
+2. Extrae información de inicio y fin de cada alerta
+3. Sirve los datos a través de `/api/sedes`
+4. La UI los consume y los visualiza
 
 **No necesitas hacer commit** de los CSVs generados (están en `.gitignore`).
 
@@ -564,6 +574,23 @@ sudo docker exec -it alertas-downloader /bin/sh -c "python /app/src/downloader/a
 ```
 
 Si tras estas comprobaciones sigue sin descargar, copia aquí los mensajes de log del downloader y los contenidos relevantes de `.env` (sin la clave completa si quieres mantenerla privada) y te ayudo a interpretar los errores.
+
+### ❌ No se actualizan los datos automáticamente
+
+**Verificar que el scheduler está activo**:
+```bash
+# Ver logs para confirmar que el scheduler se ejecutó
+sudo docker logs alertas-meteorologicas | grep -i scheduler
+
+# Deberías ver algo como:
+# ✅ Scheduler de sincronización activado - Próxima descarga en 1 hora
+```
+
+**Forzar una descarga manual**:
+```bash
+# Ejecutar el downloader directamente
+sudo docker exec alertas-meteorologicas python3 /app/src/downloader/alert_downloader.py
+```
 
 ### ❌ El contenedor no inicia
 ```bash
@@ -623,15 +650,19 @@ sudo chown -R tu_usuario:users /volume1/docker/alertas-meteorologicas
       "email": "carlos.garcia@ejemplo.com"
     },
     "alerta": {
-      "nombre": "Sin riesgo",
-      "nivel": "verde",
-      "nombre_nivel": "Sin riesgo",
-      "fenomeno": null,
+      "nombre": "Tormenta",
+      "nivel": "naranja",
+      "nombre_nivel": "Importante",
+      "fenomeno": "Tormentas eléctricas",
+      "start": "2026-02-05T14:00:00.000Z",
+      "end": "2026-02-05T20:00:00.000Z",
       "timestamp": "2026-02-05T10:45:00.000Z"
     }
   }
 ]
 ```
+
+Nota: Los campos `start` (inicio de alerta) y `end` (fin de alerta) se utilizan para el filtrado de rango temporal.
 
 ### Ejemplo de respuesta de `/api/sincronizacion/estado`:
 ```json
@@ -749,16 +780,17 @@ Este proyecto está bajo la licencia **MIT**. Puedes usarlo libremente en proyec
 
 ## 🎯 Roadmap (Futuras Mejoras)
 
-- [ ] Panel de administración web
+- [ ] Panel de administración web para gestionar sedes
 - [ ] Notificaciones por email/SMS cuando cambia el nivel de alerta
 - [ ] Histórico de alertas con gráficos
 - [ ] Exportación de datos a CSV/PDF
 - [ ] Sistema de usuarios y autenticación
-- [ ] API REST pública
+- [ ] API REST pública documentada
 - [ ] Soporte para más fuentes de datos meteorológicos
 - [ ] Aplicación móvil (iOS/Android)
 - [ ] Webhooks para integración con otros sistemas
 - [ ] Dashboard con estadísticas avanzadas
+- [ ] Caché mejorado para optimizar rendimiento
 
 ---
 
@@ -783,4 +815,4 @@ Este proyecto está bajo la licencia **MIT**. Puedes usarlo libremente en proyec
 
 **Desarrollado con ❤️ para la monitorización meteorológica en España**
 
-*Última actualización: Enero 2026*
+*Última actualización: Febrero 2026*
