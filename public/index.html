@@ -68,20 +68,10 @@
                     
 
                     <div class="filters" style="margin-top:12px;">
-                        <h4 style="margin:6px 0 8px 0">Filtrar Sedes</h4>
+                        <h4 style="margin:6px 0 8px 0">Filtrar Sedes en Mapa</h4>
                         <div id="tipologiaFilters">
                             <!-- checkboxes de tipología generados dinámicamente -->
                             <small>Cargando tipologías...</small>
-                        </div>
-                        <div style="margin-top:8px;">
-                            <div style="font-size:13px;font-weight:600;margin-bottom:4px;">Excluir fenómenos</div>
-                            <div id="fenomenoFilters">
-                                <label><input type="checkbox" value="viento"> Viento</label><br>
-                                <label><input type="checkbox" value="nieve"> Nieve</label><br>
-                                <label><input type="checkbox" value="lluvia"> Lluvia</label><br>
-                                <label><input type="checkbox" value="tormenta"> Tormenta</label><br>
-                                <label><input type="checkbox" value="niebla"> Niebla</label>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -89,7 +79,19 @@
         </div>
         
         <div class="alertas-activas">
-            <h2>⚠️ Alertas Activas</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h2 style="margin: 0;">⚠️ Alertas Activas</h2>
+                <div style="font-size:13px;font-weight:600;">
+                    <span style="margin-right:16px;">Excluir fenómenos en tabla:</span>
+                    <div id="fenomenoFiltersTabla" style="display: inline-block;">
+                        <label style="margin-right:10px;"><input type="checkbox" value="viento"> Viento</label>
+                        <label style="margin-right:10px;"><input type="checkbox" value="nieve"> Nieve</label>
+                        <label style="margin-right:10px;"><input type="checkbox" value="lluvia"> Lluvia</label>
+                        <label style="margin-right:10px;"><input type="checkbox" value="tormenta"> Tormenta</label>
+                        <label><input type="checkbox" value="niebla"> Niebla</label>
+                    </div>
+                </div>
+            </div>
             <div id="tablaAlertas">
                 <p class="loading">Cargando alertas...</p>
             </div>

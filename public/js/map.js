@@ -26,12 +26,22 @@ let todasLasSedes = [];
 let selectedTipologias = new Set();
 let excludedFenomenos = new Set();
 
-function sedeVisible(sede) {
+// Filtro solo para el mapa: aplica solo tipología
+function sedeVisibleEnMapa(sede) {
     // tipologia
     if (selectedTipologias.size > 0 && !selectedTipologias.has((sede.tipologia || '').toLowerCase())) {
         return false;
     }
-    // excluir fenomenos
+    return true;
+}
+
+// Filtro para la tabla: aplica tipología y fenómeno
+function sedeVisibleEnTabla(sede) {
+    // tipologia
+    if (selectedTipologias.size > 0 && !selectedTipologias.has((sede.tipologia || '').toLowerCase())) {
+        return false;
+    }
+    // excluir fenomenos (solo en tabla)
     if (sede.alerta && sede.alerta.fenomeno) {
         const f = sede.alerta.fenomeno.toLowerCase();
         for (const ex of excludedFenomenos) {
@@ -138,8 +148,8 @@ function actualizarEstadisticas() {
         return;
     }
     
-    // Calcular estadísticas basándose en las sedes filtradas
-    const visibles = Array.from(todasLasSedes).filter(sedeVisible);
+    // Calcular estadísticas basándose en las sedes filtradas por mapa (solo tipología)
+    const visibles = Array.from(todasLasSedes).filter(sedeVisibleEnMapa);
     const totalSedes = visibles.length;
     const rojo = visibles.filter(s => s.alerta.nivel === 'rojo').length;
     const naranja = visibles.filter(s => s.alerta.nivel === 'naranja').length;
@@ -172,9 +182,10 @@ function actualizarEstadisticas() {
 function renderizarTablaAlertas(sedes) {
     const tablaContainer = document.getElementById('tablaAlertas');
     
-    const alertasActivas = sedes.filter(sede => 
-        sede.alerta.nivel !== 'verde'
-    );
+    // Filtrar alertas activas (nivel != verde) y aplicar filtros de tabla (tipología + fenómeno)
+    const alertasActivas = sedes
+        .filter(sede => sede.alerta.nivel !== 'verde')
+        .filter(sedeVisibleEnTabla);
     
     if (alertasActivas.length === 0) {
         tablaContainer.innerHTML = `
@@ -269,8 +280,8 @@ async function cargarSedes() {
             }
         });
 
-        // aplicar filtros y añadir marcadores solamente para los visibles
-        const visibles = sedes.filter(sedeVisible);
+        // aplicar filtros y añadir marcadores solamente para los visibles en el mapa
+        const visibles = sedes.filter(sedeVisibleEnMapa);
         visibles.forEach(sede => {
             const marker = L.marker(
                 [sede.latitud, sede.longitud],
@@ -297,8 +308,8 @@ async function cargarSedes() {
             marker.bindPopup(popupContent);
         });
 
-        // renderizar tabla con las sedes visibles
-        renderizarTablaAlertas(visibles);
+        // renderizar tabla con todas las sedes (se aplican filtros dentro de renderizarTablaAlertas)
+        renderizarTablaAlertas(todasLasSedes);
         actualizarEstadisticas();
         await actualizarEstadoSincronizacion();
 
@@ -346,12 +357,12 @@ function initFilterControls() {
     if (tipologiaContainer) {
         tipologiaContainer.innerHTML = '';
     }
-    const fenContainer = document.getElementById('fenomenoFilters');
-    if (fenContainer) {
-        fenContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    const fenContainerTabla = document.getElementById('fenomenoFiltersTabla');
+    if (fenContainerTabla) {
+        fenContainerTabla.querySelectorAll('input[type="checkbox"]').forEach(cb => {
             cb.addEventListener('change', () => {
-                excludedFenomenos = new Set(Array.from(fenContainer.querySelectorAll('input:checked')).map(i => i.value));
-                cargarSedes();
+                excludedFenomenos = new Set(Array.from(fenContainerTabla.querySelectorAll('input:checked')).map(i => i.value));
+                renderizarTablaAlertas(todasLasSedes);
             });
         });
     }
