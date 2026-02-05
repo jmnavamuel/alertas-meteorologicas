@@ -484,15 +484,26 @@ function buildTipologiaFilters(sedes) {
         return;
     }
     container.innerHTML = '';
+    container.className = 'tipologia-filters';
+    
     tipos.forEach(t => {
-        const id = `tip-${t.replace(/[^a-z0-9]/g, '_')}`;
-        const wrapper = document.createElement('div');
-        wrapper.innerHTML = `<label><input type="checkbox" id="${id}" value="${t}" checked> ${t}</label>`;
-        container.appendChild(wrapper);
-        const cb = wrapper.querySelector('input');
+        const btn = document.createElement('button');
+        btn.className = 'tipologia-btn active';
+        btn.dataset.value = t;
+        btn.textContent = t.charAt(0).toUpperCase() + t.slice(1);
+        btn.title = t;
+        
+        container.appendChild(btn);
         selectedTipologias.add(t);
-        cb.addEventListener('change', (e) => {
-            if (e.target.checked) selectedTipologias.add(t); else selectedTipologias.delete(t);
+        
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            btn.classList.toggle('active');
+            if (btn.classList.contains('active')) {
+                selectedTipologias.add(t);
+            } else {
+                selectedTipologias.delete(t);
+            }
             cargarSedes();
         });
     });

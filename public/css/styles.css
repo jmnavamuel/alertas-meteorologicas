@@ -166,36 +166,37 @@ main {
 }
 
 .sidebar {
-    min-width: 250px;
+    min-width: 280px;
+    max-width: 320px;
 }
 
 .legend {
     background: white;
-    padding: 20px;
+    padding: 16px;
     border-radius: 10px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
 }
 
-.legend h3 {
-    margin-bottom: 15px;
-    color: #333;
-    border-bottom: 2px solid #667eea;
-    padding-bottom: 10px;
+.legend-colors {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #eee;
 }
 
 .legend-item {
     display: flex;
     align-items: center;
-    margin: 10px 0;
-    gap: 10px;
+    margin: 6px 0;
+    gap: 8px;
+    font-size: 13px;
 }
 
 .legend-color {
-    width: 30px;
-    height: 30px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     border: 2px solid #fff;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
     flex-shrink: 0;
 }
 
@@ -441,4 +442,48 @@ main {
 
 .rango-icon {
     font-size: 18px;
+}
+
+/* ===== Filtros de Tipología (Botones) ===== */
+.tipologia-filters {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.tipologia-btn {
+    padding: 8px 10px;
+    border: 2px solid #ddd;
+    background: white;
+    color: #333;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 12px;
+    transition: all 0.3s ease;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tipologia-btn:hover {
+    border-color: #667eea;
+    background: rgba(102, 126, 234, 0.05);
+    box-shadow: 0 2px 6px rgba(102, 126, 234, 0.12);
+    transform: translateY(-1px);
+}
+
+.tipologia-btn.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-color: #667eea;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    transform: translateY(-1px);
+}
+
+.tipologia-btn.active:hover {
+    box-shadow: 0 3px 10px rgba(102, 126, 234, 0.4);
+    transform: translateY(-2px);
 }

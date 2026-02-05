@@ -43,40 +43,20 @@
             
             <div class="sidebar">
                 <div class="legend">
-                    <h3>Niveles de Alerta</h3>
-                    
                     <div id="estadisticas" class="estadisticas-alertas">
                         <p><strong>Cargando estadísticas...</strong></p>
                     </div>
                     
-                    <div class="legend-item">
-                        <span class="legend-color verde"></span>
-                        <span>Verde - Sin riesgo</span>
-                    </div>
-                    <div class="legend-item">
-                        <span class="legend-color amarillo"></span>
-                        <span>Amarillo - Riesgo</span>
-                    </div>
-                    <div class="legend-item">
-                        <span class="legend-color naranja"></span>
-                        <span>Naranja - Riesgo importante</span>
-                    </div>
-                    <div class="legend-item">
-                        <span class="legend-color rojo"></span>
-                        <span>Rojo - Riesgo extremo</span>
-                    </div>
-                    
-
-                    <div class="filters" style="margin-top:12px;">
-                        <h4 style="margin:6px 0 8px 0">Filtrar Sedes en Mapa</h4>
-                        <div id="tipologiaFilters">
-                            <!-- checkboxes de tipología generados dinámicamente -->
+                    <div class="filters" style="margin-top: 16px;">
+                        <h4 style="margin: 0 0 10px 0; font-size: 13px; text-transform: uppercase; color: #666; letter-spacing: 0.5px;">📍 Filtrar Sedes</h4>
+                        <div id="tipologiaFilters" class="tipologia-filters">
+                            <!-- botones de tipología generados dinámicamente -->
                             <small>Cargando tipologías...</small>
                         </div>
                     </div>
 
-                    <div class="filters" style="margin-top:12px;">
-                        <h4 style="margin:6px 0 8px 0">Rango de Alertas</h4>
+                    <div class="filters" style="margin-top: 16px;">
+                        <h4 style="margin: 0 0 10px 0; font-size: 13px; text-transform: uppercase; color: #666; letter-spacing: 0.5px;">⏱️ Rango Temporal</h4>
                         <div id="rangoAlertasButtons" class="rango-alertas-buttons">
                             <button class="rango-btn active" data-value="actual">
                                 <span class="rango-icon">📅</span>
@@ -90,6 +70,26 @@
                                 <span class="rango-icon">⏰</span>
                                 48h
                             </button>
+                        </div>
+                    </div>
+
+                    <div class="legend-colors">
+                        <h4 style="margin: 0 0 8px 0; font-size: 12px; text-transform: uppercase; color: #999; letter-spacing: 0.5px;">Niveles de Alerta</h4>
+                        <div class="legend-item">
+                            <span class="legend-color verde"></span>
+                            <span>Verde</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color amarillo"></span>
+                            <span>Amarillo</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color naranja"></span>
+                            <span>Naranja</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color rojo"></span>
+                            <span>Rojo</span>
                         </div>
                     </div>
                 </div>
