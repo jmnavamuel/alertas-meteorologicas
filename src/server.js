@@ -260,6 +260,24 @@ app.get('/api/sincronizacion/estado', (req, res) => {
   }
 });
 
+// Endpoint para obtener configuración actual (incluyendo modo de datos)
+app.get('/api/config', (req, res) => {
+  const dataMode = config.data?.mode || 'real';
+  const modeLabel = dataMode === 'dummy' ? '🔷 Datos de Prueba' : '🔴 Datos Reales AEMET';
+  res.json({
+    data: {
+      mode: dataMode,
+      label: modeLabel
+    },
+    scheduler: {
+      interval_minutes: parseInt(config.scheduler?.interval_minutes) || 60
+    },
+    logging: {
+      level: config.logging?.level || 'info'
+    }
+  });
+});
+
 // Programar sincronización cada hora (ejecución automática)
 // Ejecuta el script Python del downloader al iniciar y luego cada hora
 function runDownloaderAndLog() {

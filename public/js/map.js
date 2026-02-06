@@ -553,6 +553,25 @@ function initFilterControls() {
     }
 }
 
+// Cargar configuración y mostrar modo de datos en el título
+async function cargarConfiguracion() {
+    try {
+        const response = await fetch('/api/config');
+        const config = await response.json();
+        
+        // Actualizar el span del modo de datos
+        const dataModeSpan = document.getElementById('dataMode');
+        if (dataModeSpan) {
+            dataModeSpan.textContent = `(${config.data.label})`;
+            dataModeSpan.style.fontSize = '0.85em';
+            dataModeSpan.style.color = config.data.mode === 'dummy' ? '#ff9500' : '#666';
+            dataModeSpan.style.marginLeft = '8px';
+        }
+    } catch (err) {
+        console.error('❌ Error cargando configuración:', err);
+    }
+}
+
 function buildFenomenoFilters(sedes) {
     const container = document.getElementById('fenomenoFiltersTabla');
     if (!container) return;
@@ -639,4 +658,7 @@ function buildTipologiaFilters(sedes) {
 }
 
 // inicializar controles (listeners)
+cargarConfiguracion();
 initFilterControls();
+actualizarEstadoSincronizacion();
+cargarSedes();
