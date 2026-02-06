@@ -592,16 +592,7 @@ async function cargarConfiguracion() {
         const response = await fetch('/api/config');
         const config = await response.json();
         
-        // Actualizar el span del modo de datos en el título
-        const dataModeSpan = document.getElementById('dataMode');
-        if (dataModeSpan) {
-            dataModeSpan.textContent = `(${config.data.label})`;
-            dataModeSpan.style.fontSize = '0.85em';
-            dataModeSpan.style.color = config.data.mode === 'dummy' ? '#ff9500' : '#666';
-            dataModeSpan.style.marginLeft = '8px';
-        }
-        
-        // Actualizar botón de modo de datos
+        // Actualizar botón de modo de datos con estado actual
         const dataModeButtons = document.querySelectorAll('#dataModeButtons .rango-btn');
         if (dataModeButtons.length > 0) {
             dataModeButtons.forEach(btn => btn.classList.remove('active'));
