@@ -513,16 +513,49 @@ async function cargarSedes() {
 cargarSedes();
 
 // Agregar listeners para los botones de rango temporal
-document.querySelectorAll('.rango-btn').forEach(btn => {
+document.querySelectorAll('#rangoAlertasButtons .rango-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
         // Remover clase active de todos los botones
-        document.querySelectorAll('.rango-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('#rangoAlertasButtons .rango-btn').forEach(b => b.classList.remove('active'));
         // Añadir clase active al botón clickeado
         e.target.closest('.rango-btn').classList.add('active');
         // Actualizar variable global
         rangoAlertas = e.target.closest('.rango-btn').dataset.value;
         // Recargar sedes
         cargarSedes();
+    });
+});
+
+// Agregar listeners para los botones de modo de datos
+document.querySelectorAll('#dataModeButtons .rango-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+        const mode = e.target.closest('.rango-btn').dataset.value;
+        
+        try {
+            const response = await fetch('/api/config/setmode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: mode })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Error al cambiar modo');
+            }
+            
+            const result = await response.json();
+            console.log(`✅ Modo cambiado a: ${result.label}`);
+            
+            // Remover clase active de todos los botones
+            document.querySelectorAll('#dataModeButtons .rango-btn').forEach(b => b.classList.remove('active'));
+            // Añadir clase active al botón clickeado
+            e.target.closest('.rango-btn').classList.add('active');
+            
+            // Recargar datos
+            cargarSedes();
+        } catch (err) {
+            console.error('❌ Error cambiando modo:', err);
+            alert('Error al cambiar el modo de datos');
+        }
     });
 });
 
@@ -559,13 +592,23 @@ async function cargarConfiguracion() {
         const response = await fetch('/api/config');
         const config = await response.json();
         
-        // Actualizar el span del modo de datos
+        // Actualizar el span del modo de datos en el título
         const dataModeSpan = document.getElementById('dataMode');
         if (dataModeSpan) {
             dataModeSpan.textContent = `(${config.data.label})`;
             dataModeSpan.style.fontSize = '0.85em';
             dataModeSpan.style.color = config.data.mode === 'dummy' ? '#ff9500' : '#666';
             dataModeSpan.style.marginLeft = '8px';
+        }
+        
+        // Actualizar botón de modo de datos
+        const dataModeButtons = document.querySelectorAll('#dataModeButtons .rango-btn');
+        if (dataModeButtons.length > 0) {
+            dataModeButtons.forEach(btn => btn.classList.remove('active'));
+            const activeBtn = Array.from(dataModeButtons).find(btn => btn.dataset.value === config.data.mode);
+            if (activeBtn) {
+                activeBtn.classList.add('active');
+            }
         }
     } catch (err) {
         console.error('❌ Error cargando configuración:', err);

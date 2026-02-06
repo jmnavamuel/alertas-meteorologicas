@@ -311,6 +311,49 @@ app.get('/api/config', (req, res) => {
   });
 });
 
+// Endpoint para cambiar el modo de datos
+app.post('/api/config/setmode', express.json(), (req, res) => {
+  const { mode } = req.body;
+  
+  if (!mode || !['dummy', 'real'].includes(mode)) {
+    return res.status(400).json({ error: 'Modo inválido. Debe ser "dummy" o "real"' });
+  }
+  
+  try {
+    // Leer config.ini actual
+    let configContent = '';
+    if (fs.existsSync(configPath)) {
+      configContent = fs.readFileSync(configPath, 'utf-8');
+    }
+    
+    // Parsear configuración
+    let currentConfig = ini.parse(configContent);
+    
+    // Actualizar modo
+    if (!currentConfig.data) currentConfig.data = {};
+    currentConfig.data.mode = mode;
+    
+    // Serializar back a INI
+    const newContent = ini.stringify(currentConfig);
+    
+    // Escribir al archivo
+    fs.writeFileSync(configPath, newContent, 'utf-8');
+    
+    const modeLabel = mode === 'dummy' ? '🔷 Datos de Prueba' : '🔴 Datos Reales AEMET';
+    console.log(`✅ Modo de datos cambiado a: ${mode} (${modeLabel})`);
+    
+    res.json({
+      success: true,
+      mode: mode,
+      label: modeLabel,
+      message: `Modo cambiado a ${modeLabel}`
+    });
+  } catch (err) {
+    console.error('❌ Error cambiando modo:', err.message);
+    res.status(500).json({ error: 'Error al cambiar el modo de datos', message: err.message });
+  }
+});
+
 // Programar sincronización cada hora (ejecución automática)
 // Ejecuta el script Python del downloader al iniciar y luego cada hora
 function runDownloaderAndLog() {
