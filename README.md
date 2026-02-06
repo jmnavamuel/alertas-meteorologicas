@@ -240,7 +240,33 @@ cat .env
 
 ---
 
-## � PASO 3B: Configurar Modo de Datos (Opcional)
+## 🔄 PASO 3B: Cambiar Modo de Datos (Selector Visual en Web)
+
+Por defecto, el sistema carga datos **REALES** de AEMET. Para testing, puedes cambiar a **datos dummy**.
+
+### ✨ FORMA FÁCIL (RECOMENDADO): Selector Visual en la Web
+
+**La forma más rápida:**
+
+1. Abre la aplicación web
+2. En la barra lateral derecha, busca: **"📊 Fuente de Datos"**
+3. Dos botones:
+   - 🔴 **Real AEMET** (datos reales, activo por defecto)
+   - 🔷 **Datos Prueba** (alertas de testing)
+4. Haz clic → los datos se recargan al instante sin reiniciar
+
+### 📝 Forma Manual: Editar config.ini
+
+```bash
+nano config.ini
+# Cambiar: mode=real (AEMET) o mode=dummy (prueba)
+```
+
+### 🔧 Primera vez: crear archivo
+
+```bash
+cp config.example.ini config.ini
+```
 
 Por defecto, el sistema carga datos **REALES** de AEMET. Para testing y desarrollo, puedes cambiar a **datos dummy** fácilmente:
 
