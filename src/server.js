@@ -75,9 +75,25 @@ function findLatestAlertsFile() {
   }
 }
 
-// Seleccionar archivo de alertas según configuración
+// Seleccionar archivo de alertas según configuración (relee config.ini en cada petición)
 function getAlertsFilePath() {
-  const dataMode = config.data?.mode || 'real';
+  // Releer config.ini para detectar cambios sin reiniciar
+  let currentConfig = {
+    data: { mode: 'real' },
+    scheduler: { interval_minutes: 60 },
+    logging: { level: 'info' }
+  };
+  
+  try {
+    if (fs.existsSync(configPath)) {
+      const configContent = fs.readFileSync(configPath, 'utf-8');
+      currentConfig = ini.parse(configContent);
+    }
+  } catch (err) {
+    console.error('⚠️  Error leyendo config.ini en getAlertsFilePath:', err.message);
+  }
+  
+  const dataMode = currentConfig.data?.mode || 'real';
   
   if (dataMode === 'dummy') {
     const dummyPath = path.join(DATA_DIR, 'alertas_dummy.csv');
@@ -262,18 +278,35 @@ app.get('/api/sincronizacion/estado', (req, res) => {
 
 // Endpoint para obtener configuración actual (incluyendo modo de datos)
 app.get('/api/config', (req, res) => {
-  const dataMode = config.data?.mode || 'real';
+  // Releer config.ini en cada petición para detectar cambios sin reiniciar
+  let currentConfig = {
+    data: { mode: 'real' },
+    scheduler: { interval_minutes: 60 },
+    logging: { level: 'info' }
+  };
+  
+  try {
+    if (fs.existsSync(configPath)) {
+      const configContent = fs.readFileSync(configPath, 'utf-8');
+      currentConfig = ini.parse(configContent);
+    }
+  } catch (err) {
+    console.error('⚠️  Error leyendo config.ini en endpoint:', err.message);
+  }
+  
+  const dataMode = currentConfig.data?.mode || 'real';
   const modeLabel = dataMode === 'dummy' ? '🔷 Datos de Prueba' : '🔴 Datos Reales AEMET';
+  
   res.json({
     data: {
       mode: dataMode,
       label: modeLabel
     },
     scheduler: {
-      interval_minutes: parseInt(config.scheduler?.interval_minutes) || 60
+      interval_minutes: parseInt(currentConfig.scheduler?.interval_minutes) || 60
     },
     logging: {
-      level: config.logging?.level || 'info'
+      level: currentConfig.logging?.level || 'info'
     }
   });
 });
