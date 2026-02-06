@@ -1,0 +1,25 @@
+codigo_provincia,nombre_provincia,subprovincia,nivel,fenomeno,start,end,timestamp,source_file,excerpt
+28,Madrid,Zona metropolitana,rojo,Tormenta,2026-02-06T08:00:00Z,2026-02-06T14:00:00Z,2026-02-06T09:15:30Z,dummy_madrid_tormenta.xml,Alerta roja por tormentas severas
+28,Madrid,Sierra,amarillo,Nieve,2026-02-06T12:00:00Z,2026-02-07T12:00:00Z,2026-02-06T09:15:30Z,dummy_madrid_nieve.xml,Alerta amarilla por nevadas
+08,Barcelona,Costa,naranja,Viento,2026-02-06T10:00:00Z,2026-02-06T18:00:00Z,2026-02-06T09:15:30Z,dummy_barcelona_viento.xml,Alerta naranja por vientos fuertes
+08,Barcelona,Interior,amarillo,Lluvia,2026-02-06T14:00:00Z,2026-02-06T22:00:00Z,2026-02-06T09:15:30Z,dummy_barcelona_lluvia.xml,Alerta amarilla por lluvias intensas
+46,Valencia,Costa,rojo,Lluvia,2026-02-06T06:00:00Z,2026-02-06T12:00:00Z,2026-02-06T09:15:30Z,dummy_valencia_lluvia.xml,Alerta roja por precipitaciones torrenciales
+46,Valencia,Interior,amarillo,Granizo,2026-02-06T15:00:00Z,2026-02-06T20:00:00Z,2026-02-06T09:15:30Z,dummy_valencia_granizo.xml,Alerta amarilla por granizo
+41,Sevilla,Zona urbana,naranja,Calor,2026-02-06T13:00:00Z,2026-02-06T19:00:00Z,2026-02-06T09:15:30Z,dummy_sevilla_calor.xml,Alerta naranja por temperaturas extremas
+41,Sevilla,Sierra,amarillo,Viento,2026-02-06T09:00:00Z,2026-02-06T17:00:00Z,2026-02-06T09:15:30Z,dummy_sevilla_viento.xml,Alerta amarilla por vientos
+48,Vizcaya,Zona urbana,rojo,Nieve,2026-02-06T07:00:00Z,2026-02-07T07:00:00Z,2026-02-06T09:15:30Z,dummy_bilbao_nieve.xml,Alerta roja por nevadas intensas
+48,Vizcaya,Montaña,amarillo,Niebla,2026-02-06T08:00:00Z,2026-02-06T12:00:00Z,2026-02-06T09:15:30Z,dummy_bilbao_niebla.xml,Alerta amarilla por niebla
+50,Zaragoza,Zona urbana,naranja,Tormenta,2026-02-06T11:00:00Z,2026-02-06T16:00:00Z,2026-02-06T09:15:30Z,dummy_zaragoza_tormenta.xml,Alerta naranja por tormentas
+50,Zaragoza,Ribera,amarillo,Lluvia,2026-02-06T13:00:00Z,2026-02-06T19:00:00Z,2026-02-06T09:15:30Z,dummy_zaragoza_lluvia.xml,Alerta amarilla por precipitaciones
+29,Málaga,Costa,rojo,Lluvia,2026-02-06T05:00:00Z,2026-02-06T11:00:00Z,2026-02-06T09:15:30Z,dummy_malaga_lluvia.xml,Alerta roja por lluvia torrencial
+29,Málaga,Interior,naranja,Viento,2026-02-06T10:00:00Z,2026-02-06T18:00:00Z,2026-02-06T09:15:30Z,dummy_malaga_viento.xml,Alerta naranja por vientos fuertes
+03,Alicante,Costa,amarillo,Granizo,2026-02-06T14:00:00Z,2026-02-06T20:00:00Z,2026-02-06T09:15:30Z,dummy_alicante_granizo.xml,Alerta amarilla por granizo
+03,Alicante,Interior,amarillo,Tormenta,2026-02-06T12:00:00Z,2026-02-06T18:00:00Z,2026-02-06T09:15:30Z,dummy_alicante_tormenta.xml,Alerta amarilla por tormentas
+39,Cantabria,Zona urbana,naranja,Nieve,2026-02-06T08:00:00Z,2026-02-06T14:00:00Z,2026-02-06T09:15:30Z,dummy_santander_nieve.xml,Alerta naranja por nevadas
+39,Cantabria,Interior,amarillo,Niebla,2026-02-06T07:00:00Z,2026-02-06T11:00:00Z,2026-02-06T09:15:30Z,dummy_santander_niebla.xml,Alerta amarilla por niebla densa
+45,Toledo,Zona urbana,rojo,Calor,2026-02-06T12:00:00Z,2026-02-06T18:00:00Z,2026-02-06T09:15:30Z,dummy_toledo_calor.xml,Alerta roja por onda de calor
+45,Toledo,Interior,amarillo,Viento,2026-02-06T10:00:00Z,2026-02-06T16:00:00Z,2026-02-06T09:15:30Z,dummy_toledo_viento.xml,Alerta amarilla por vientos
+38,Santa Cruz de Tenerife,Costa,naranja,Lluvia,2026-02-06T09:00:00Z,2026-02-06T15:00:00Z,2026-02-06T09:15:30Z,dummy_tenerife_lluvia.xml,Alerta naranja por precipitaciones
+38,Santa Cruz de Tenerife,Interior,amarillo,Viento,2026-02-06T11:00:00Z,2026-02-06T17:00:00Z,2026-02-06T09:15:30Z,dummy_tenerife_viento.xml,Alerta amarilla por vientos
+35,Las Palmas,Costa,rojo,Tormenta,2026-02-06T07:00:00Z,2026-02-06T13:00:00Z,2026-02-06T09:15:30Z,dummy_laspalmas_tormenta.xml,Alerta roja por tormentas marítimas
+35,Las Palmas,Interior,amarillo,Granizo,2026-02-06T15:00:00Z,2026-02-06T21:00:00Z,2026-02-06T09:15:30Z,dummy_laspalmas_granizo.xml,Alerta amarilla por granizo
