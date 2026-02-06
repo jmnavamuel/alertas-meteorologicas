@@ -27,8 +27,23 @@ El archivo `alertas_dummy.csv` contiene alertas de prueba para todas las sedes c
 
 ### Cómo usar datos dummy
 
-Desde el directorio raíz del proyecto:
+**Opción 1: Usando archivo config.ini (RECOMENDADO):**
 
+Edita `config.ini` en la raíz del proyecto:
+```ini
+[data]
+mode=dummy    # Cambiar a 'real' para datos de AEMET
+```
+
+O usa el script de ayuda:
+```bash
+cd /path/to/alertas-meteorologicas
+./switch-data-mode.sh dummy   # Cambiar a dummy
+./switch-data-mode.sh real    # Cambiar a real
+./switch-data-mode.sh status  # Ver modo actual
+```
+
+**Opción 2: Script Python (heredado):**
 ```bash
 # Cambiar a datos dummy para testing
 python3 USE_DUMMY_DATA.py dummy
@@ -37,7 +52,7 @@ python3 USE_DUMMY_DATA.py dummy
 python3 USE_DUMMY_DATA.py real
 ```
 
-> **Nota**: El script hace automáticamente un backup del último CSV real descargado.
+> **Nota**: El archivo `config.ini` es la forma preferida y más operativa. El script `USE_DUMMY_DATA.py` se mantiene por compatibilidad.
 
 ## Formato de los archivos CSV
 

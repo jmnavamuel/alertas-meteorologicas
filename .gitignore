@@ -6,6 +6,10 @@ package-lock.json
 # Variables de entorno (NUNCA subir al git)
 .env
 
+# Configuración local (NUNCA subir al git)
+# Cada developer debe crear su propio config.ini con sus preferencias
+config.ini
+
 # Archivos de alertas descargados
 data/alertas-*.csv
 

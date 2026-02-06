@@ -240,7 +240,72 @@ cat .env
 
 ---
 
-## 🐳 PASO 4: Desplegar con Docker
+## � PASO 3B: Configurar Modo de Datos (Opcional)
+
+Por defecto, el sistema carga datos **REALES** de AEMET. Para testing y desarrollo, puedes cambiar a **datos dummy** fácilmente:
+
+### Crear archivo de configuración:
+```bash
+# Copia la plantilla de configuración
+cp config.example.ini config.ini
+```
+
+### Contenido del archivo `config.ini`:
+```ini
+[data]
+# Modo de datos: 'dummy' para pruebas, 'real' para AEMET
+mode=real
+
+[scheduler]
+# Intervalo en minutos entre descargas automáticas
+interval_minutes=60
+
+[logging]
+# Nivel de log: debug, info, warn, error
+level=info
+```
+
+### Cambiar entre modos:
+
+**Opción A: Usar script bash (macOS/Linux):**
+```bash
+# Cambiar a datos de prueba
+./switch-data-mode.sh dummy
+
+# Cambiar a datos reales
+./switch-data-mode.sh real
+
+# Ver modo actual
+./switch-data-mode.sh status
+```
+
+**Opción B: Editar directamente:**
+```bash
+# Editar config.ini
+nano config.ini
+
+# Cambiar la línea:
+mode=dummy    # para datos de prueba
+mode=real     # para datos reales (defecto)
+```
+
+### 📊 Datos Dummy
+
+El archivo `data/alertas_dummy.csv` contiene 24 alertas de prueba realistas:
+- 🏆 Múltiples provincias (Madrid, Barcelona, Valencia, Sevilla, etc.)
+- 🌪️ Diversos fenómenos (Tormenta, Nieve, Lluvia, Viento, etc.)
+- 🎨 Todos los niveles de alerta (Rojo, Naranja, Amarillo)
+- ⏰ Distribución temporal para testing (hoy, +24h, +48h)
+
+**Ventajas de usar dummy data:**
+- ✅ Testing sin dependencias externas
+- ✅ Desarrollo offline
+- ✅ Demostración de características
+- ✅ No consume cuota de la API de AEMET
+
+---
+
+## �🐳 PASO 4: Desplegar con Docker
 
 ### Opción A: Primera instalación
 ```bash

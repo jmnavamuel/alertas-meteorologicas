@@ -5,10 +5,27 @@ const csv = require('csv-parser');
 const path = require('path');
 const cors = require('cors');
 const { exec } = require('child_process');
+const ini = require('ini');
 
 const app = express();
 const PORT = process.env.PORT || 3100;
 const DATA_DIR = path.join(__dirname, '../data');
+
+// Cargar configuración desde config.ini
+const configPath = path.join(__dirname, '../config.ini');
+let config = {
+  data: { mode: 'real' },
+  scheduler: { interval_minutes: 60 },
+  logging: { level: 'info' }
+};
+
+if (fs.existsSync(configPath)) {
+  const configContent = fs.readFileSync(configPath, 'utf-8');
+  config = ini.parse(configContent);
+  console.log(`📋 Configuración cargada desde: config.ini (modo: ${config.data?.mode || 'real'})`);
+} else {
+  console.log('⚠️  config.ini no encontrado, usando valores por defecto');
+}
 
 app.use(cors());
 app.use(express.json());
@@ -58,11 +75,32 @@ function findLatestAlertsFile() {
   }
 }
 
+// Seleccionar archivo de alertas según configuración
+function getAlertsFilePath() {
+  const dataMode = config.data?.mode || 'real';
+  
+  if (dataMode === 'dummy') {
+    const dummyPath = path.join(DATA_DIR, 'alertas_dummy.csv');
+    if (fs.existsSync(dummyPath)) {
+      console.log('🔷 Modo DUMMY: usando alertas_dummy.csv');
+      return dummyPath;
+    } else {
+      console.warn('⚠️  Archivo dummy no encontrado, buscando alertas reales');
+    }
+  }
+  
+  const realPath = findLatestAlertsFile();
+  if (realPath) {
+    console.log('🔴 Modo REAL: usando ' + path.basename(realPath));
+  }
+  return realPath;
+}
+
 // Leer alertas del CSV generado por el script Python
 function leerAlertasDesdeCSV() {
   return new Promise((resolve) => {
     const alertas = {};
-    const csvPath = findLatestAlertsFile();
+    const csvPath = getAlertsFilePath();
     if (!csvPath) {
       console.log('⚠️  CSV de alertas no encontrado en:', DATA_DIR);
       resolve(alertas);
@@ -240,8 +278,9 @@ function scheduleHourlySync() {
   // Ejecutar inmediatamente al arrancar y luego cada hora
   try {
     runDownloaderAndLog();
-    setInterval(runDownloaderAndLog, 60 * 60 * 1000);
-    console.log('⏱️  Sincronización programada cada 1 hora');
+    const intervalMs = (parseInt(config.scheduler?.interval_minutes) || 60) * 60 * 1000;
+    setInterval(runDownloaderAndLog, intervalMs);
+    console.log(`⏱️  Sincronización programada cada ${config.scheduler?.interval_minutes || 60} minuto(s)`);
   } catch (e) {
     console.error('❌ Error al programar sincronización:', e.message);
   }
