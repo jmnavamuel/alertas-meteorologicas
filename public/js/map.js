@@ -50,18 +50,36 @@ function obtenerAlertaEnRango(alerta) {
         return null;
     }
     
+    // Obtener inicio y fin de cada día (medianoche local)
+    function getStartOfDay(date) {
+        const d = new Date(date);
+        d.setHours(0, 0, 0, 0);
+        return d;
+    }
+    
+    function getEndOfDay(date) {
+        const d = new Date(date);
+        d.setHours(23, 59, 59, 999);
+        return d;
+    }
+    
+    const todayStart = getStartOfDay(now);
+    const todayEnd = getEndOfDay(now);
+    const tomorrowStart = getStartOfDay(new Date(now.getTime() + 24 * 60 * 60 * 1000));
+    const tomorrowEnd = getEndOfDay(new Date(now.getTime() + 24 * 60 * 60 * 1000));
+    const dayAfterStart = getStartOfDay(new Date(now.getTime() + 48 * 60 * 60 * 1000));
+    const dayAfterEnd = getEndOfDay(new Date(now.getTime() + 48 * 60 * 60 * 1000));
+    
     switch (rangoAlertas) {
         case 'actual':
-            // alertas vigentes: que ya han comenzado Y aún no han terminado
-            return alertaStart <= now ? alerta : null;
+            // Alertas que comiencen O acaben hoy
+            return (alertaStart <= todayEnd && (!alertaEnd || alertaEnd >= todayStart)) ? alerta : null;
         case '24h':
-            // alertas que comienzan en las próximas 24h (o ya comenzaron) Y aún no han terminado
-            const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-            return alertaStart <= in24h ? alerta : null;
+            // Alertas que comiencen O acaben mañana
+            return (alertaStart <= tomorrowEnd && (!alertaEnd || alertaEnd >= tomorrowStart)) ? alerta : null;
         case '48h':
-            // alertas que comienzan en las próximas 48h (o ya comenzaron) Y aún no han terminado
-            const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
-            return alertaStart <= in48h ? alerta : null;
+            // Alertas que comiencen O acaben pasado mañana
+            return (alertaStart <= dayAfterEnd && (!alertaEnd || alertaEnd >= dayAfterStart)) ? alerta : null;
         default:
             return alerta;
     }
@@ -165,11 +183,11 @@ async function actualizarEstadoSincronizacion() {
             syncMessage.className = 'sync-message';
         }
         
-        // Mostrar fecha relativa y fecha exacta si está disponible
+        // Mostrar fecha relativa y fecha exacta del último archivo de alertas
         if (estado.ultimaSincronizacion) {
-            syncTime.textContent = `${formatearFechaRelativa(estado.ultimaSincronizacion)} · ${formatFechaExacta(estado.ultimaSincronizacion)}`;
+            syncTime.textContent = `Última carga: ${formatearFechaRelativa(estado.ultimaSincronizacion)}`;
         } else {
-            syncTime.textContent = 'Nunca';
+            syncTime.textContent = 'Sin datos';
         }
         // Mostrar mensaje y nombre de archivo si está disponible
         syncMessage.textContent = estado.mensaje + (estado.archivo ? ` (${estado.archivo})` : '');
