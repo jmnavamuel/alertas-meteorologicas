@@ -256,11 +256,30 @@ function getLatestAemetFileInfo() {
   try {
     const alertasDir = path.join(__dirname, '../data/alertas');
     if (!fs.existsSync(alertasDir)) return null;
+    
     const files = fs.readdirSync(alertasDir)
-      .map(f => ({ name: f, path: path.join(alertasDir, f), mtime: fs.statSync(path.join(alertasDir, f)).mtimeMs }))
-      .sort((a, b) => b.mtime - a.mtime);
+      .filter(f => f.match(/^alertas-\d{8}-\d{4}\.csv$/))
+      .map(f => {
+        // Parsear la fecha del nombre del archivo: alertas-YYYYMMDD-HHMM.csv
+        const match = f.match(/alertas-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})/);
+        if (!match) return null;
+        
+        const [, year, month, day, hour, minute] = match;
+        const dateISO = `${year}-${month}-${day}T${hour}:${minute}:00Z`;
+        const timestamp = new Date(dateISO).getTime();
+        
+        return { 
+          name: f, 
+          path: path.join(alertasDir, f), 
+          timestamp: timestamp,
+          dateISO: dateISO
+        };
+      })
+      .filter(f => f !== null)
+      .sort((a, b) => b.timestamp - a.timestamp);
+    
     if (!files.length) return null;
-    return { filename: files[0].name, mtimeISO: new Date(files[0].mtime).toISOString() };
+    return { filename: files[0].name, mtimeISO: files[0].dateISO };
   } catch (e) {
     console.error('❌ Error obteniendo info de alertas:', e.message);
     return null;
